@@ -6,6 +6,7 @@ from book_sales_tracker.config import get_settings
 from book_sales_tracker.google_books import BookNotFoundError
 from book_sales_tracker.marketplace import list_marketplace_options
 from book_sales_tracker.models import BookMetadata, BookSearchResult
+from book_sales_tracker.isbn_comparator import render_comparator_tab
 from book_sales_tracker.monitor_dashboard import render_monitor_tab
 from book_sales_tracker.pipeline import PipelineError, resolve_book_by_title, run_pipeline
 from book_sales_tracker.visualization import (
@@ -132,11 +133,8 @@ def _run_analysis(
 
 
 def _render_analysis_tab(settings) -> None:
-    st.subheader("Análisis por ISBN o título")
-    st.caption(
-        "Consulta ad-hoc con Keepa + Gemini. "
-        "Los datos de ranking provienen exclusivamente de Keepa."
-    )
+    st.subheader("Análisis ISBN")
+    st.caption("Evolución de un solo libro: BSR, tramos, estimación IA (Keepa + Gemini).")
 
     marketplace_options = list_marketplace_options()
     marketplace_labels = {label: code for code, label in marketplace_options}
@@ -241,18 +239,31 @@ def main() -> None:
     )
     st.title("Book Sales Tracker")
 
-    tab_analysis, tab_monitor = st.tabs(["Análisis ISBN", "Monitor editorial"])
+    tab_analysis, tab_compare, tab_monitor = st.tabs(
+        ["Análisis ISBN", "Comparador ISBN", "Monitor editorial"]
+    )
 
     with tab_monitor:
         render_monitor_tab()
+
+    with tab_compare:
+        try:
+            settings = get_settings()
+        except Exception as exc:
+            st.error(
+                "Configura `.env` con `KEEPA_API_KEY` (y opcionalmente `GOOGLE_BOOKS_API_KEY`). "
+                f"Detalle: {exc}"
+            )
+        else:
+            render_comparator_tab(settings)
 
     with tab_analysis:
         try:
             settings = get_settings()
         except Exception as exc:
             st.error(
-                "No se pudo cargar la configuración para análisis ISBN. "
-                "Crea un `.env` con `KEEPA_API_KEY` y `GEMINI_API_KEY`. "
+                "No se pudo cargar la configuración. Crea un `.env` con "
+                "`KEEPA_API_KEY` y `GEMINI_API_KEY`. "
                 f"Detalle: {exc}"
             )
         else:

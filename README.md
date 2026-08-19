@@ -43,21 +43,13 @@ PYTHONPATH=src streamlit run src/book_sales_tracker/app.py
 Abre **http://localhost:8501** (o el puerto reenviado en Cloud Agent).
 
 ### Pestaña «Análisis ISBN»
+Un libro: evolución BSR, tramos, gráficos y estimación IA (Keepa + Gemini).
 
-En el formulario puedes introducir:
-
-- **ISBN** o **título** (con selector si hay varios resultados)
-- **Rango de fechas**
-- **Marketplace Amazon** (por defecto Amazon.es)
+### Pestaña «Comparador ISBN»
+Dos o más ISBNs en el mismo marketplace y periodo: BSR superpuesto y tabla comparativa (sin Gemini).
 
 ### Pestaña «Monitor editorial»
-
-Lee la SQLite de `keepa-monitor/` (sin llamadas extra a Keepa):
-
-- **Mis títulos** — comparativa propio vs escauteado, evolución BSR, histórico
-- **Mercados y categorías** — top 100 por mercado (UK, FR, ES…), saltos importantes
-
-Requiere haber ejecutado antes `keepa-monitor/scripts/daily_fetch.py`.
+Saltos bruscos en top 100 por categoría y mercado (UK, FR, ES…). Lee `keepa-monitor/db/keepa_monitor.db` — requiere `daily_fetch.py`.
 
 ## Uso (CLI opcional)
 

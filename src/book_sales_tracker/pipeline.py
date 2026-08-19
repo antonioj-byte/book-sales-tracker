@@ -17,7 +17,7 @@ from book_sales_tracker.keepa_client import (
 )
 from book_sales_tracker.llm_estimator import LlmEstimatorError, estimate_sales
 from book_sales_tracker.marketplace import get_marketplace
-from book_sales_tracker.models import BookMetadata, KeepaProductInfo, PipelineResult
+from book_sales_tracker.models import BookMetadata, KeepaProductInfo, PipelineResult, SalesEstimate
 
 
 class PipelineError(Exception):
@@ -74,6 +74,7 @@ def run_pipeline(
     marketplace_code: str,
     start_date: date,
     end_date: date,
+    include_estimate: bool = True,
 ) -> PipelineResult:
     if start_date > end_date:
         raise PipelineError("La fecha de inicio debe ser anterior o igual a la fecha de fin.")
@@ -110,19 +111,27 @@ def run_pipeline(
 
     summary = summarize_bsr_series(points)
 
-    try:
-        estimate = estimate_sales(
-            settings=settings,
-            book=book,
-            marketplace_label=marketplace.label,
-            keepa=keepa_info,
-            points=points,
-            summary=summary,
-            date_start=start_date.isoformat(),
-            date_end=end_date.isoformat(),
+    if include_estimate:
+        try:
+            estimate = estimate_sales(
+                settings=settings,
+                book=book,
+                marketplace_label=marketplace.label,
+                keepa=keepa_info,
+                points=points,
+                summary=summary,
+                date_start=start_date.isoformat(),
+                date_end=end_date.isoformat(),
+            )
+        except LlmEstimatorError as exc:
+            raise PipelineError(str(exc)) from exc
+    else:
+        estimate = SalesEstimate(
+            range_text="—",
+            confidence="—",
+            explanation="Estimación omitida (modo comparador).",
+            raw_response="",
         )
-    except LlmEstimatorError as exc:
-        raise PipelineError(str(exc)) from exc
 
     return PipelineResult(
         book=book,
