@@ -17,7 +17,9 @@ from lib.deltas import fetch_relative_rows  # noqa: E402
 DOMAIN_LABELS = {
     9: "Amazon.es",
     1: "Amazon.com",
+    2: "Amazon.co.uk",
     3: "Amazon.de",
+    4: "Amazon.fr",
 }
 
 

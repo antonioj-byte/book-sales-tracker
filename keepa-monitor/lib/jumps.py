@@ -28,7 +28,9 @@ class JumpSeverity(StrEnum):
 DOMAIN_LABELS = {
     9: "Amazon.es",
     1: "Amazon.com",
+    2: "Amazon.co.uk",
     3: "Amazon.de",
+    4: "Amazon.fr",
 }
 
 
