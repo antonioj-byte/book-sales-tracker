@@ -9,3 +9,6 @@ __pycache__/
 .ruff_cache/
 .DS_Store
 .streamlit/secrets.toml
+keepa-monitor/db/*.db
+keepa-monitor/logs/*.log
+keepa-monitor/.env
