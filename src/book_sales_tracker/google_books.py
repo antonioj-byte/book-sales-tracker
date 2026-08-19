@@ -6,7 +6,12 @@ from datetime import date, datetime
 import httpx
 
 from book_sales_tracker.marketplace import MarketplaceConfig
-from book_sales_tracker.models import BookMetadata, BookSearchResult
+from book_sales_tracker.models import (
+    BookMetadata,
+    BookSearchResult,
+    PublisherCatalogResult,
+    PublisherSuggestion,
+)
 
 GOOGLE_BOOKS_BASE = "https://www.googleapis.com/books/v1/volumes"
 MAX_RETRIES = 3
@@ -76,6 +81,10 @@ def _request_volumes(params: dict, api_key: str | None) -> dict:
             time.sleep(2 ** attempt)
             continue
 
+        if response.status_code in {500, 502, 503, 504} and attempt < MAX_RETRIES - 1:
+            time.sleep(2 ** attempt)
+            continue
+
         try:
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
@@ -142,6 +151,207 @@ def _publication_overlaps_range(
     return pub_start <= range_end and pub_end >= range_start
 
 
+def _normalize_publisher_name(value: str) -> str:
+    cleaned = re.sub(r"[^\w\s]", " ", value.lower())
+    return " ".join(cleaned.split())
+
+
+def _publisher_match_score(query: str, publisher: str | None) -> float:
+    if not publisher:
+        return 0.0
+    query_norm = _normalize_publisher_name(query)
+    publisher_norm = _normalize_publisher_name(publisher)
+    if not query_norm or not publisher_norm:
+        return 0.0
+    if query_norm == publisher_norm:
+        return 1.0
+    if query_norm in publisher_norm or publisher_norm in query_norm:
+        return 0.9
+    query_tokens = set(query_norm.split())
+    publisher_tokens = set(publisher_norm.split())
+    if not query_tokens:
+        return 0.0
+    overlap = len(query_tokens & publisher_tokens) / len(query_tokens)
+    return overlap
+
+
+def _publisher_names_match(confirmed: str, candidate: str | None) -> bool:
+    if not candidate:
+        return False
+    confirmed_norm = _normalize_publisher_name(confirmed)
+    candidate_norm = _normalize_publisher_name(candidate)
+    if confirmed_norm == candidate_norm:
+        return True
+    return confirmed_norm in candidate_norm or candidate_norm in confirmed_norm
+
+
+def _publisher_search_queries(query: str) -> list[str]:
+    query = query.strip()
+    return [
+        f'inpublisher:"{query}"',
+        f"inpublisher:{query}",
+        f'"{query}"',
+        query,
+    ]
+
+
+def _fetch_volume_pages(
+    query: str,
+    marketplace: MarketplaceConfig,
+    api_key: str | None,
+    *,
+    max_volumes: int = 120,
+) -> list[dict]:
+    items: list[dict] = []
+    start_index = 0
+    page_size = 40
+
+    while len(items) < max_volumes:
+        payload = _request_volumes(
+            {
+                "q": query,
+                "country": marketplace.google_books_country,
+                "langRestrict": marketplace.google_books_lang,
+                "maxResults": min(page_size, max_volumes - len(items)),
+                "startIndex": start_index,
+                "orderBy": "newest",
+            },
+            api_key,
+        )
+        batch = payload.get("items") or []
+        if not batch:
+            break
+        items.extend(batch)
+        start_index += len(batch)
+        total = int(payload.get("totalItems") or 0)
+        if start_index >= total or len(batch) < page_size:
+            break
+    return items
+
+
+def discover_publishers(
+    query: str,
+    marketplace: MarketplaceConfig,
+    api_key: str | None = None,
+    max_volumes: int = 120,
+) -> list[PublisherSuggestion]:
+    query = query.strip()
+    if not query:
+        raise ValueError("El nombre de la editorial no puede estar vacío")
+
+    counts: dict[str, int] = {}
+    samples: dict[str, list[str]] = {}
+    scores: dict[str, float] = {}
+    seen_items: set[str] = set()
+
+    for search_query in _publisher_search_queries(query):
+        for item in _fetch_volume_pages(
+            search_query, marketplace, api_key, max_volumes=max_volumes
+        ):
+            item_id = item.get("id") or str(item)
+            if item_id in seen_items:
+                continue
+            seen_items.add(item_id)
+
+            metadata = _parse_volume(item)
+            if not metadata.publisher:
+                continue
+            score = _publisher_match_score(query, metadata.publisher)
+            if score < 0.4:
+                continue
+
+            name = metadata.publisher.strip()
+            counts[name] = counts.get(name, 0) + 1
+            scores[name] = max(scores.get(name, 0.0), score)
+            samples.setdefault(name, [])
+            if len(samples[name]) < 3:
+                samples[name].append(metadata.title)
+
+    suggestions = [
+        PublisherSuggestion(
+            name=name,
+            volume_count=count,
+            sample_titles=samples.get(name, []),
+            match_score=round(scores.get(name, 0.0), 2),
+        )
+        for name, count in counts.items()
+    ]
+    suggestions.sort(key=lambda item: (item.match_score, item.volume_count), reverse=True)
+    return suggestions[:12]
+
+
+def search_publisher_catalog(
+    publisher_confirmed: str,
+    marketplace: MarketplaceConfig,
+    pub_start: date,
+    pub_end: date,
+    api_key: str | None = None,
+    max_results: int = 120,
+) -> PublisherCatalogResult:
+    publisher_confirmed = publisher_confirmed.strip()
+    if not publisher_confirmed:
+        raise ValueError("Debes confirmar el nombre de la editorial.")
+    if pub_start > pub_end:
+        raise ValueError("La fecha de inicio debe ser anterior o igual a la de fin.")
+
+    collected: dict[str, BookMetadata] = {}
+    seen_items: set[str] = set()
+    volumes_scanned = 0
+    matched_publisher = 0
+    in_date_range = 0
+    with_isbn = 0
+    queries_tried: list[str] = []
+
+    for search_query in _publisher_search_queries(publisher_confirmed):
+        queries_tried.append(search_query)
+        items = _fetch_volume_pages(
+            search_query, marketplace, api_key, max_volumes=max_results * 3
+        )
+        if not items:
+            continue
+
+        for item in items:
+            item_id = item.get("id") or str(item)
+            if item_id in seen_items:
+                continue
+            seen_items.add(item_id)
+            volumes_scanned += 1
+
+            metadata = _parse_volume(item)
+            if not _publisher_names_match(publisher_confirmed, metadata.publisher):
+                continue
+            matched_publisher += 1
+
+            if not _publication_overlaps_range(metadata.published_date, pub_start, pub_end):
+                continue
+            in_date_range += 1
+
+            isbn_key = metadata.isbn_13 or metadata.isbn_10
+            if not isbn_key:
+                continue
+            with_isbn += 1
+
+            if isbn_key not in collected:
+                collected[isbn_key] = metadata
+            if len(collected) >= max_results:
+                break
+
+        if len(collected) >= max_results:
+            break
+
+    books = list(collected.values())
+    books.sort(key=lambda book: book.published_date or "", reverse=True)
+    return PublisherCatalogResult(
+        publisher_confirmed=publisher_confirmed,
+        books=books,
+        volumes_scanned=volumes_scanned,
+        matched_publisher=matched_publisher,
+        in_date_range=in_date_range,
+        with_isbn=with_isbn,
+        queries_tried=queries_tried,
+    )
+
+
 def search_by_publisher(
     publisher: str,
     marketplace: MarketplaceConfig,
@@ -150,54 +360,10 @@ def search_by_publisher(
     api_key: str | None = None,
     max_results: int = 120,
 ) -> list[BookMetadata]:
-    publisher = publisher.strip()
-    if not publisher:
-        raise ValueError("El nombre de la editorial no puede estar vacío")
-    if pub_start > pub_end:
-        raise ValueError("La fecha de inicio debe ser anterior o igual a la de fin.")
-
-    collected: dict[str, BookMetadata] = {}
-    start_index = 0
-    page_size = 40
-
-    while len(collected) < max_results:
-        payload = _request_volumes(
-            {
-                "q": f'inpublisher:"{publisher}"',
-                "country": marketplace.google_books_country,
-                "langRestrict": marketplace.google_books_lang,
-                "maxResults": min(page_size, max_results - len(collected)),
-                "startIndex": start_index,
-                "orderBy": "newest",
-            },
-            api_key,
-        )
-        items = payload.get("items") or []
-        if not items:
-            break
-
-        for item in items:
-            metadata = _parse_volume(item)
-            if metadata.publisher and publisher.lower() not in metadata.publisher.lower():
-                continue
-            if not _publication_overlaps_range(metadata.published_date, pub_start, pub_end):
-                continue
-            isbn_key = metadata.isbn_13 or metadata.isbn_10
-            if not isbn_key:
-                continue
-            if isbn_key not in collected:
-                collected[isbn_key] = metadata
-            if len(collected) >= max_results:
-                break
-
-        start_index += len(items)
-        total = int(payload.get("totalItems") or 0)
-        if start_index >= total or len(items) < page_size:
-            break
-
-    results = list(collected.values())
-    results.sort(key=lambda book: book.published_date or "", reverse=True)
-    return results
+    result = search_publisher_catalog(
+        publisher, marketplace, pub_start, pub_end, api_key, max_results
+    )
+    return result.books
 
 
 def search_by_title(

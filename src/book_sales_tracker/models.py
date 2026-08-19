@@ -44,6 +44,23 @@ class BookSearchResult(BaseModel):
     display_label: str
 
 
+class PublisherSuggestion(BaseModel):
+    name: str
+    volume_count: int
+    sample_titles: list[str] = Field(default_factory=list)
+    match_score: float = 0.0
+
+
+class PublisherCatalogResult(BaseModel):
+    publisher_confirmed: str
+    books: list[BookMetadata] = Field(default_factory=list)
+    volumes_scanned: int = 0
+    matched_publisher: int = 0
+    in_date_range: int = 0
+    with_isbn: int = 0
+    queries_tried: list[str] = Field(default_factory=list)
+
+
 class BsrPoint(BaseModel):
     timestamp: datetime
     bsr: int
