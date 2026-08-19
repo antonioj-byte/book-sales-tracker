@@ -24,7 +24,8 @@ python scripts/report.py
 | 1 | `setup_db.py` | No |
 | 2 | `daily_fetch.py` | Sí |
 | 3 | `compute_deltas.py` | No |
-| 4 | `report.py` | No |
+| 4 | `detect_jumps.py` | No |
+| 5 | `report.py` | No |
 
 ## Variables de entorno
 
@@ -57,7 +58,33 @@ python scripts/report.py
 - Entrada / salida del top 100
 - Movimiento ≥ `POSITION_MOVE_THRESHOLD` posiciones entre snapshots
 
-> Con un solo día de datos no hay comparables; las alertas aparecen tras acumular histórico.
+### Saltos importantes (`detect_jumps.py`)
+
+Detección dedicada sobre el top 100 por categoría (offline, sin API extra):
+
+| Tipo | Descripción | Severidad |
+|------|-------------|-----------|
+| `new_entrant_top10` | Nuevo en top 100 directamente en top 10 | alta |
+| `new_entrant_top20` | Nuevo en top 11–20 | alta |
+| `new_entrant` | Nuevo en top 21–100 | media |
+| `entered_top10` / `entered_top20` | Subió desde dentro del top 100 | alta |
+| `surge_up` / `surge_down` | Movimiento ≥ 30 posiciones | alta/media |
+
+```bash
+# Amazon.es (mercado 9), comparando 7 días
+python scripts/detect_jumps.py --markets 9 --lookback-days 7
+
+# Dos mercados (requiere filas en categories.csv con mercado=9 y mercado=1)
+python scripts/detect_jumps.py --markets 9,1 --min-severity high
+
+# Solo Literatura y ficción
+python scripts/detect_jumps.py --categories 902689031 --format json
+
+# Guardar en alerts
+python scripts/detect_jumps.py --write-alerts --output reports/jumps.txt
+```
+
+> Con un solo día de datos no hay comparables; los saltos aparecen tras acumular histórico diario.
 
 ## Verificación SQL
 
