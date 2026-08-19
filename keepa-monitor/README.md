@@ -32,7 +32,7 @@ python scripts/report.py
 | Variable | Descripción |
 |----------|-------------|
 | `KEEPA_API_KEY` | Obligatoria para `daily_fetch.py` |
-| `MAX_TOKENS_PER_RUN` | Presupuesto diario (default 150) |
+| `MAX_TOKENS_PER_RUN` | Presupuesto diario (default 250 con 4 categorías UK/FR) |
 | `DEFAULT_KEEPA_DOMAIN` | Mercado para ASINs relativos (9 = Amazon.es) |
 | `CATEGORY_TREE_REFRESH_DAYS` | Refresh de category_tree (default 30) |
 | `BEST_SELLERS_TOP_N` | Recorte top N (default 100) |
@@ -110,7 +110,7 @@ python scripts/report.py --days 14 --output reports/weekly.md
 - 50 tokens / categoría best sellers
 - 2 tokens / category_lookup (solo cada 30 días)
 
-Con la config de ejemplo (2 ASINs + 2 categorías): **~102 tokens/día**.
+Con UK + FR (4 categorías) + 2 ASINs relativos: **~202 tokens/día**.
 
 ## Rama de respaldo
 
