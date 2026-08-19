@@ -40,11 +40,24 @@ GEMINI_MODEL=gemini-3.5-flash-lite
 PYTHONPATH=src streamlit run src/book_sales_tracker/app.py
 ```
 
+Abre **http://localhost:8501** (o el puerto reenviado en Cloud Agent).
+
+### Pestaña «Análisis ISBN»
+
 En el formulario puedes introducir:
 
 - **ISBN** o **título** (con selector si hay varios resultados)
 - **Rango de fechas**
 - **Marketplace Amazon** (por defecto Amazon.es)
+
+### Pestaña «Monitor editorial»
+
+Lee la SQLite de `keepa-monitor/` (sin llamadas extra a Keepa):
+
+- **Mis títulos** — comparativa propio vs escauteado, evolución BSR, histórico
+- **Mercados y categorías** — top 100 por mercado (UK, FR, ES…), saltos importantes
+
+Requiere haber ejecutado antes `keepa-monitor/scripts/daily_fetch.py`.
 
 ## Uso (CLI opcional)
 

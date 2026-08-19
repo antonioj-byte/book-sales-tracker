@@ -6,6 +6,7 @@ from book_sales_tracker.config import get_settings
 from book_sales_tracker.google_books import BookNotFoundError
 from book_sales_tracker.marketplace import list_marketplace_options
 from book_sales_tracker.models import BookMetadata, BookSearchResult
+from book_sales_tracker.monitor_dashboard import render_monitor_tab
 from book_sales_tracker.pipeline import PipelineError, resolve_book_by_title, run_pipeline
 from book_sales_tracker.visualization import (
     build_tier_distribution_chart,
@@ -130,27 +131,12 @@ def _run_analysis(
     _render_estimate(result)
 
 
-def main() -> None:
-    st.set_page_config(
-        page_title="Book Sales Tracker",
-        page_icon="📚",
-        layout="wide",
-    )
-    st.header("Evolución BSR y estimación de ventas")
+def _render_analysis_tab(settings) -> None:
+    st.subheader("Análisis por ISBN o título")
     st.caption(
-        "Introduce un ISBN o título, selecciona fechas y marketplace. "
+        "Consulta ad-hoc con Keepa + Gemini. "
         "Los datos de ranking provienen exclusivamente de Keepa."
     )
-
-    try:
-        settings = get_settings()
-    except Exception as exc:
-        st.error(
-            "No se pudo cargar la configuración. Crea un archivo `.env` con "
-            "`KEEPA_API_KEY` y `GEMINI_API_KEY`. "
-            f"Detalle: {exc}"
-        )
-        st.stop()
 
     marketplace_options = list_marketplace_options()
     marketplace_labels = {label: code for code, label in marketplace_options}
@@ -183,12 +169,11 @@ def main() -> None:
         end_date = date_cols[1].date_input("Fecha fin", value=today)
         submitted = st.form_submit_button("Analizar", type="primary")
 
-    pending = st.session_state.get("pending_title_search")
     if submitted:
         st.session_state.pop("pending_title_search", None)
         if not query.strip():
             st.error("Introduce un ISBN o título.")
-            st.stop()
+            return
 
         marketplace_code = marketplace_labels[marketplace_label]
         if search_mode == "ISBN":
@@ -205,10 +190,10 @@ def main() -> None:
                 search_results = resolve_book_by_title(settings, query, marketplace_code)
             except BookNotFoundError as exc:
                 st.error(str(exc))
-                st.stop()
+                return
             except Exception as exc:
                 st.error(f"Error al buscar en Google Books: {exc}")
-                st.stop()
+                return
 
             if len(search_results) == 1:
                 _run_analysis(
@@ -246,6 +231,32 @@ def main() -> None:
                 start_date=date.fromisoformat(pending["start_date"]),
                 end_date=date.fromisoformat(pending["end_date"]),
             )
+
+
+def main() -> None:
+    st.set_page_config(
+        page_title="Book Sales Tracker",
+        page_icon="📚",
+        layout="wide",
+    )
+    st.title("Book Sales Tracker")
+
+    tab_analysis, tab_monitor = st.tabs(["Análisis ISBN", "Monitor editorial"])
+
+    with tab_monitor:
+        render_monitor_tab()
+
+    with tab_analysis:
+        try:
+            settings = get_settings()
+        except Exception as exc:
+            st.error(
+                "No se pudo cargar la configuración para análisis ISBN. "
+                "Crea un `.env` con `KEEPA_API_KEY` y `GEMINI_API_KEY`. "
+                f"Detalle: {exc}"
+            )
+        else:
+            _render_analysis_tab(settings)
 
 
 if __name__ == "__main__":
