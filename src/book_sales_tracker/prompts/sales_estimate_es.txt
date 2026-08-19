@@ -17,16 +17,39 @@ Tramos BSR usados (7 niveles):
 - Top 50.000: 10.001–50.000
 - Cola larga: >50.000
 
+ESTIMACIÓN EN DOS NIVELES:
+
+A) **Periodo analizado** (siempre): ritmo de ventas reciente o en el rango de fechas pedido.
+   Usa `resumen_tramos` y `serie_diaria_muestra` del periodo.
+
+B) **Ventas acumuladas** (solo si `es_largo_recorrido` es true en los datos):
+   Estima el total aproximado vendido en Amazon en ese marketplace durante toda la vida útil
+   disponible en Keepa. Usa `historico_completo` (distribución de tramos en todos los días con BSR).
+   Integra periodos en distintos tramos: un libro puede haber vendido mucho al lanzamiento y
+   menos después. Sé conservador si faltan años de histórico o hay huecos.
+   Si `es_largo_recorrido` es false, NO incluyas las secciones acumuladas.
+
 FORMATO DE RESPUESTA (usa exactamente estas secciones con estos títulos):
 
 ## Rango estimado
-[tu rango aquí]
+[rango de ventas en el PERIODO ANALIZADO — indica la unidad temporal: /semana, /mes o en el periodo total]
 
 ## Nivel de confianza
 [nivel: bajo/medio/alto — explicación breve]
 
 ## Explicación
-[tu razonamiento aquí]
+[tu razonamiento sobre el ritmo reciente / periodo analizado]
+
+(Solo si es_largo_recorrido = true, añade además:)
+
+## Ventas acumuladas estimadas
+[rango total aproximado de unidades vendidas en toda la vida útil en ese marketplace]
+
+## Confianza acumulada
+[nivel: bajo/medio/alto — explicación breve]
+
+## Explicación acumulada
+[cómo integraste los distintos tramos históricos; limitaciones por datos parciales]
 
 DATOS DEL ANÁLISIS:
 {context_json}

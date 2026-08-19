@@ -1,6 +1,11 @@
 from datetime import date
 
-from book_sales_tracker.bsr_processor import filter_and_resample_daily, summarize_bsr_series
+from book_sales_tracker.bsr_processor import (
+    filter_and_resample_daily,
+    is_long_running_title,
+    lifetime_daily_points,
+    summarize_bsr_series,
+)
 from book_sales_tracker.config import Settings
 from book_sales_tracker.google_books import (
     BookNotFoundError,
@@ -110,6 +115,11 @@ def run_pipeline(
 
     summary = summarize_bsr_series(points)
 
+    lifetime_points = lifetime_daily_points(raw_series)
+    lifetime_summary = summarize_bsr_series(lifetime_points) if lifetime_points else None
+    lifetime_days = lifetime_summary.total_days if lifetime_summary else 0
+    long_running = is_long_running_title(book, keepa_info, lifetime_days)
+
     try:
         estimate = estimate_sales(
             settings=settings,
@@ -120,9 +130,19 @@ def run_pipeline(
             summary=summary,
             date_start=start_date.isoformat(),
             date_end=end_date.isoformat(),
+            lifetime_summary=lifetime_summary,
+            lifetime_days=lifetime_days,
+            is_long_running=long_running,
         )
     except LlmEstimatorError as exc:
         raise PipelineError(str(exc)) from exc
+
+    estimate = estimate.model_copy(
+        update={
+            "lifetime_days": lifetime_days if long_running else None,
+            "is_long_running": long_running,
+        }
+    )
 
     return PipelineResult(
         book=book,

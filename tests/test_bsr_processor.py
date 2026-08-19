@@ -58,3 +58,37 @@ El BSR se mantuvo en tramos medios."""
     assert "10–30" in parsed.range_text
     assert "medio" in parsed.confidence
     assert "BSR" in parsed.explanation
+
+
+def test_parse_llm_cumulative_sections() -> None:
+    text = """## Rango estimado
+5–15 unidades/semana
+
+## Nivel de confianza
+medio
+
+## Explicación
+Ritmo reciente estable.
+
+## Ventas acumuladas estimadas
+8.000–15.000 unidades en total
+
+## Confianza acumulada
+bajo — histórico parcial
+
+## Explicación acumulada
+Integración por tramos desde 2018."""
+    parsed = _parse_sections(text, expect_cumulative=True)
+    assert parsed.cumulative_range_text is not None
+    assert "8.000" in parsed.cumulative_range_text
+    assert parsed.is_long_running is True
+
+
+def test_is_long_running_by_lifetime_days() -> None:
+    from book_sales_tracker.bsr_processor import is_long_running_title
+    from book_sales_tracker.models import BookMetadata, KeepaProductInfo
+
+    book = BookMetadata(title="Test")
+    keepa = KeepaProductInfo(asin="X")
+    assert is_long_running_title(book, keepa, 400) is True
+    assert is_long_running_title(book, keepa, 100) is False

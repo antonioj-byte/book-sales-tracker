@@ -82,6 +82,11 @@ class SalesEstimate(BaseModel):
     confidence: str
     explanation: str
     raw_response: str
+    cumulative_range_text: str | None = None
+    cumulative_confidence: str | None = None
+    cumulative_explanation: str | None = None
+    lifetime_days: int | None = None
+    is_long_running: bool = False
 
 
 class PipelineResult(BaseModel):

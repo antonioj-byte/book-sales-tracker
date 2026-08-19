@@ -91,3 +91,49 @@ def summarize_bsr_series(points: list[BsrPoint]) -> BsrSummary:
         tier_changes=tier_changes,
         total_days=total,
     )
+
+
+LONG_RUNNING_MIN_DAYS = 365
+
+
+def lifetime_daily_points(series: list[tuple[datetime, int]]) -> list[BsrPoint]:
+    if not series:
+        return []
+    start = series[0][0].date()
+    end = series[-1][0].date()
+    return filter_and_resample_daily(series, start, end)
+
+
+def _parse_publication_date(value: str | None) -> date | None:
+    if not value:
+        return None
+    cleaned = value.strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
+        try:
+            return datetime.strptime(cleaned, fmt).date()
+        except ValueError:
+            continue
+    if len(cleaned) >= 4 and cleaned[:4].isdigit():
+        return date(int(cleaned[:4]), 1, 1)
+    return None
+
+
+def is_long_running_title(
+    book,
+    keepa,
+    lifetime_days: int,
+    *,
+    min_days: int = LONG_RUNNING_MIN_DAYS,
+) -> bool:
+    if lifetime_days >= min_days:
+        return True
+
+    now = datetime.now(timezone.utc)
+    if keepa.listed_since and (now - keepa.listed_since).days >= min_days:
+        return True
+
+    published = _parse_publication_date(book.published_date)
+    if published and (date.today() - published).days >= min_days:
+        return True
+
+    return False

@@ -54,9 +54,28 @@ def _render_estimate(result) -> None:
         "Esta estimación se basa en el BSR, un ranking relativo. "
         "No es una cifra oficial de ventas de Amazon."
     )
+
+    st.markdown("#### Ritmo en el periodo analizado")
     st.markdown(f"**Rango estimado:** {estimate.range_text}")
     st.markdown(f"**Nivel de confianza:** {estimate.confidence}")
     st.markdown(f"**Explicación:** {estimate.explanation}")
+
+    if estimate.is_long_running and estimate.cumulative_range_text:
+        st.divider()
+        st.markdown("#### Ventas acumuladas (vida útil en Amazon)")
+        if estimate.lifetime_days:
+            st.caption(
+                f"Título de largo recorrido — ~{estimate.lifetime_days:,} días con histórico BSR en Keepa."
+            )
+        st.markdown(f"**Total acumulado estimado:** {estimate.cumulative_range_text}")
+        if estimate.cumulative_confidence:
+            st.markdown(f"**Confianza:** {estimate.cumulative_confidence}")
+        if estimate.cumulative_explanation:
+            st.markdown(f"**Explicación:** {estimate.cumulative_explanation}")
+    elif estimate.is_long_running:
+        st.caption(
+            "Título de largo recorrido detectado, pero el modelo no devolvió estimación acumulada."
+        )
 
 
 def _run_analysis(
