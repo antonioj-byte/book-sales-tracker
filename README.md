@@ -48,6 +48,9 @@ Un libro: evolución BSR, tramos, gráficos y estimación IA (Keepa + Gemini).
 ### Pestaña «Comparador ISBN»
 Dos o más ISBNs en el mismo marketplace y periodo: BSR superpuesto y tabla comparativa (sin Gemini).
 
+### Pestaña «Catálogo editorial»
+Nombre de editorial + ventana de **publicación** → Google Books descubre ISBNs → Keepa analiza BSR de cada título (requiere `GOOGLE_BOOKS_API_KEY`).
+
 ### Pestaña «Monitor editorial»
 Saltos bruscos en top 100 por categoría y mercado (UK, FR, ES…). Lee `keepa-monitor/db/keepa_monitor.db` — requiere `daily_fetch.py`.
 

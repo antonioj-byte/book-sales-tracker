@@ -1,5 +1,7 @@
+import calendar
 import re
 import time
+from datetime import date, datetime
 
 import httpx
 
@@ -105,6 +107,97 @@ def fetch_by_isbn(
         raise BookNotFoundError(f"No se encontró ningún libro con ISBN {normalized}")
 
     return _parse_volume(payload["items"][0])
+
+
+def _parse_published_date(value: str | None) -> tuple[date | None, date | None]:
+    """Devuelve (inicio, fin) del periodo de publicación inferido del campo de Google Books."""
+    if not value:
+        return None, None
+    cleaned = value.strip()
+    for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
+        try:
+            if fmt == "%Y-%m-%d":
+                parsed = datetime.strptime(cleaned, fmt).date()
+                return parsed, parsed
+            if fmt == "%Y-%m":
+                parsed = datetime.strptime(cleaned, fmt).date()
+                last_day = calendar.monthrange(parsed.year, parsed.month)[1]
+                return parsed.replace(day=1), parsed.replace(day=last_day)
+            if fmt == "%Y":
+                year = int(cleaned[:4])
+                return date(year, 1, 1), date(year, 12, 31)
+        except ValueError:
+            continue
+    return None, None
+
+
+def _publication_overlaps_range(
+    published_date: str | None,
+    range_start: date,
+    range_end: date,
+) -> bool:
+    pub_start, pub_end = _parse_published_date(published_date)
+    if pub_start is None or pub_end is None:
+        return False
+    return pub_start <= range_end and pub_end >= range_start
+
+
+def search_by_publisher(
+    publisher: str,
+    marketplace: MarketplaceConfig,
+    pub_start: date,
+    pub_end: date,
+    api_key: str | None = None,
+    max_results: int = 120,
+) -> list[BookMetadata]:
+    publisher = publisher.strip()
+    if not publisher:
+        raise ValueError("El nombre de la editorial no puede estar vacío")
+    if pub_start > pub_end:
+        raise ValueError("La fecha de inicio debe ser anterior o igual a la de fin.")
+
+    collected: dict[str, BookMetadata] = {}
+    start_index = 0
+    page_size = 40
+
+    while len(collected) < max_results:
+        payload = _request_volumes(
+            {
+                "q": f'inpublisher:"{publisher}"',
+                "country": marketplace.google_books_country,
+                "langRestrict": marketplace.google_books_lang,
+                "maxResults": min(page_size, max_results - len(collected)),
+                "startIndex": start_index,
+                "orderBy": "newest",
+            },
+            api_key,
+        )
+        items = payload.get("items") or []
+        if not items:
+            break
+
+        for item in items:
+            metadata = _parse_volume(item)
+            if metadata.publisher and publisher.lower() not in metadata.publisher.lower():
+                continue
+            if not _publication_overlaps_range(metadata.published_date, pub_start, pub_end):
+                continue
+            isbn_key = metadata.isbn_13 or metadata.isbn_10
+            if not isbn_key:
+                continue
+            if isbn_key not in collected:
+                collected[isbn_key] = metadata
+            if len(collected) >= max_results:
+                break
+
+        start_index += len(items)
+        total = int(payload.get("totalItems") or 0)
+        if start_index >= total or len(items) < page_size:
+            break
+
+    results = list(collected.values())
+    results.sort(key=lambda book: book.published_date or "", reverse=True)
+    return results
 
 
 def search_by_title(

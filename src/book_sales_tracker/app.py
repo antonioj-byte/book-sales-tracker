@@ -8,6 +8,7 @@ from book_sales_tracker.marketplace import list_marketplace_options
 from book_sales_tracker.models import BookMetadata, BookSearchResult
 from book_sales_tracker.isbn_comparator import render_comparator_tab
 from book_sales_tracker.monitor_dashboard import render_monitor_tab
+from book_sales_tracker.publisher_catalog import render_publisher_catalog_tab
 from book_sales_tracker.pipeline import PipelineError, resolve_book_by_title, run_pipeline
 from book_sales_tracker.visualization import (
     build_tier_distribution_chart,
@@ -239,12 +240,24 @@ def main() -> None:
     )
     st.title("Book Sales Tracker")
 
-    tab_analysis, tab_compare, tab_monitor = st.tabs(
-        ["Análisis ISBN", "Comparador ISBN", "Monitor editorial"]
+    tab_analysis, tab_compare, tab_catalog, tab_monitor = st.tabs(
+        ["Análisis ISBN", "Comparador ISBN", "Catálogo editorial", "Monitor editorial"]
     )
 
     with tab_monitor:
         render_monitor_tab()
+
+    with tab_catalog:
+        try:
+            settings = get_settings()
+        except Exception as exc:
+            st.error(
+                "Configura `.env` con `KEEPA_API_KEY`. "
+                "Para descubrir catálogo también `GOOGLE_BOOKS_API_KEY`. "
+                f"Detalle: {exc}"
+            )
+        else:
+            render_publisher_catalog_tab(settings)
 
     with tab_compare:
         try:
