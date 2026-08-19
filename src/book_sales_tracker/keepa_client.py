@@ -96,10 +96,25 @@ def fetch_product_by_isbn(
     if not bsr_series:
         raise KeepaNoSalesRankError("El producto no tiene histórico de BSR disponible.")
 
+    listed_since = (
+        keepa_minutes_to_datetime(product["listedSince"])
+        if product.get("listedSince")
+        else None
+    )
+    tracking_since = (
+        keepa_minutes_to_datetime(product["trackingSince"])
+        if product.get("trackingSince")
+        else None
+    )
+
     info = KeepaProductInfo(
         asin=product["asin"],
         title=product.get("title"),
         category_id=category_id,
         sales_rank_reference=product.get("salesRankReference"),
+        listed_since=listed_since,
+        tracking_since=tracking_since,
+        bsr_available_from=bsr_series[0][0],
+        bsr_available_to=bsr_series[-1][0],
     )
     return info, bsr_series

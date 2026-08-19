@@ -86,6 +86,25 @@ def _run_analysis(
             return
 
     st.success("Análisis completado.")
+
+    keepa = result.keepa
+    if keepa.bsr_available_from and keepa.bsr_available_to:
+        avail_from = keepa.bsr_available_from.date().isoformat()
+        avail_to = keepa.bsr_available_to.date().isoformat()
+        req_from = result.date_range_start.isoformat()
+        req_to = result.date_range_end.isoformat()
+        if result.date_range_start < keepa.bsr_available_from.date():
+            st.warning(
+                f"Pediste datos desde **{req_from}**, pero Keepa solo tiene histórico BSR "
+                f"en {result.marketplace_label} desde **{avail_from}** hasta **{avail_to}**. "
+                "El gráfico muestra la intersección entre tu rango y los datos disponibles."
+            )
+        elif req_from != result.bsr_series[0].timestamp.date().isoformat():
+            st.info(
+                f"Histórico BSR disponible en Keepa: **{avail_from}** → **{avail_to}** "
+                f"(periodo analizado: {req_from} → {req_to})."
+            )
+
     _render_book_header(result)
     st.divider()
     _render_summary_metrics(result)

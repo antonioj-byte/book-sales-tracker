@@ -77,6 +77,10 @@ class KeepaProductInfo(BaseModel):
     category_id: int | None = None
     category_name: str | None = None
     sales_rank_reference: int | None = None
+    listed_since: datetime | None = None
+    tracking_since: datetime | None = None
+    bsr_available_from: datetime | None = None
+    bsr_available_to: datetime | None = None
 
 
 class SalesEstimate(BaseModel):
