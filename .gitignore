@@ -1,0 +1,15 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.DS_Store
+.streamlit/secrets.toml
+keepa-monitor/db/*.db
+keepa-monitor/logs/*.log
+keepa-monitor/reports/
+keepa-monitor/.env
