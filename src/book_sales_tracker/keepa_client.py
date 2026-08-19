@@ -45,19 +45,37 @@ def _extract_bsr_series(product: dict) -> tuple[list[tuple[datetime, int]], int 
         )
 
     category_id = int(sales_rank_reference)
+    csv_data = product.get("csv") or []
     sales_ranks = product.get("salesRanks") or {}
     category_key = str(category_id)
 
-    if category_key in sales_ranks and sales_ranks[category_key]:
-        return _parse_sales_rank_series(sales_ranks[category_key]), category_id
+    candidates: list[tuple[str, list[tuple[datetime, int]]]] = []
 
-    csv_data = product.get("csv") or []
+    # csv[3] = SALES: histórico principal de BSR, a menudo más completo que salesRanks[ref]
     if len(csv_data) > 3 and csv_data[3]:
-        return _parse_sales_rank_series(csv_data[3]), category_id
+        candidates.append(("csv_sales", _parse_sales_rank_series(csv_data[3])))
 
-    raise KeepaNoSalesRankError(
-        "No se encontró histórico de BSR para la categoría principal del producto."
+    if category_key in sales_ranks and sales_ranks[category_key]:
+        candidates.append(
+            ("sales_ranks_ref", _parse_sales_rank_series(sales_ranks[category_key]))
+        )
+
+    if not candidates:
+        raise KeepaNoSalesRankError(
+            "No se encontró histórico de BSR para la categoría principal del producto."
+        )
+
+    # Preferir la serie que llega más atrás en el tiempo (mismo ranking cuando solapan)
+    _, best_series = min(
+        candidates,
+        key=lambda item: item[1][0][0]
+        if item[1]
+        else datetime.max.replace(tzinfo=timezone.utc),
     )
+    if not best_series:
+        raise KeepaNoSalesRankError("El histórico de BSR está vacío.")
+
+    return best_series, category_id
 
 
 def fetch_product_by_isbn(
