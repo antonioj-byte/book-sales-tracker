@@ -10,19 +10,13 @@ def classify_bsr(rank: int) -> RankTier:
         return RankTier.TOP_100
     if rank <= 500:
         return RankTier.TOP_500
-    if rank <= 1_000:
-        return RankTier.TOP_1K
-    if rank <= 5_000:
-        return RankTier.TOP_5K
+    if rank <= 2_000:
+        return RankTier.TOP_2K
     if rank <= 10_000:
         return RankTier.TOP_10K
     if rank <= 50_000:
         return RankTier.TOP_50K
-    if rank <= 100_000:
-        return RankTier.TOP_100K
-    if rank <= 150_000:
-        return RankTier.TOP_150K
-    return RankTier.BEYOND_150K
+    return RankTier.LONG_TAIL
 
 
 def _to_utc_datetime(value: date | datetime) -> datetime:

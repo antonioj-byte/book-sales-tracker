@@ -62,7 +62,7 @@ PYTHONPATH=src python scripts/run_pipeline.py --isbn 9788410178595 --marketplace
 
 1. **Google Books** — metadatos y validación del libro
 2. **Keepa** — resolución ISBN→ASIN e histórico BSR (sin scraping de Amazon)
-3. **Procesamiento** — filtro por fechas, agregación diaria y clasificación en 11 tramos BSR
+3. **Procesamiento** — filtro por fechas, agregación diaria y clasificación en 7 tramos BSR
 4. **Gemini Flash-Lite** — estimación en español (rango + confianza + explicación)
 
 ## Tramos BSR
@@ -72,13 +72,10 @@ PYTHONPATH=src python scripts/run_pipeline.py --isbn 9788410178595 --marketplace
 | Top 10 | 1–10 |
 | Top 100 | 11–100 |
 | Top 500 | 101–500 |
-| Top 1.000 | 501–1.000 |
-| Top 5.000 | 1.001–5.000 |
-| Top 10.000 | 5.001–10.000 |
+| Top 2.000 | 501–2.000 |
+| Top 10.000 | 2.001–10.000 |
 | Top 50.000 | 10.001–50.000 |
-| Top 100.000 | 50.001–100.000 |
-| Top 150.000 | 100.001–150.000 |
-| Más de 150.000 | >150.000 |
+| Cola larga | >50.000 |
 
 ## Coste aproximado por consulta
 

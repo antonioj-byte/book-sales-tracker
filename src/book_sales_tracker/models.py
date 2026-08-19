@@ -8,13 +8,10 @@ class RankTier(IntEnum):
     TOP_10 = 1
     TOP_100 = 2
     TOP_500 = 3
-    TOP_1K = 4
-    TOP_5K = 5
-    TOP_10K = 6
-    TOP_50K = 7
-    TOP_100K = 8
-    TOP_150K = 9
-    BEYOND_150K = 10
+    TOP_2K = 4
+    TOP_10K = 5
+    TOP_50K = 6
+    LONG_TAIL = 7
 
     @property
     def label_es(self) -> str:
@@ -22,13 +19,10 @@ class RankTier(IntEnum):
             RankTier.TOP_10: "Top 10",
             RankTier.TOP_100: "Top 100",
             RankTier.TOP_500: "Top 500",
-            RankTier.TOP_1K: "Top 1.000",
-            RankTier.TOP_5K: "Top 5.000",
+            RankTier.TOP_2K: "Top 2.000",
             RankTier.TOP_10K: "Top 10.000",
             RankTier.TOP_50K: "Top 50.000",
-            RankTier.TOP_100K: "Top 100.000",
-            RankTier.TOP_150K: "Top 150.000",
-            RankTier.BEYOND_150K: "Más de 150.000",
+            RankTier.LONG_TAIL: "Cola larga",
         }
         return labels[self]
 

@@ -9,13 +9,10 @@ TIER_ORDER = [
     RankTier.TOP_10,
     RankTier.TOP_100,
     RankTier.TOP_500,
-    RankTier.TOP_1K,
-    RankTier.TOP_5K,
+    RankTier.TOP_2K,
     RankTier.TOP_10K,
     RankTier.TOP_50K,
-    RankTier.TOP_100K,
-    RankTier.TOP_150K,
-    RankTier.BEYOND_150K,
+    RankTier.LONG_TAIL,
 ]
 
 TIER_LABELS = [tier.label_es for tier in TIER_ORDER]
@@ -49,7 +46,7 @@ def build_tier_timeline_chart(points: list[BsrPoint]) -> go.Figure:
         tickmode="array",
         tickvals=[tier.value for tier in TIER_ORDER],
         ticktext=TIER_LABELS,
-        range=[0.5, RankTier.BEYOND_150K.value + 0.5],
+        range=[0.5, RankTier.LONG_TAIL.value + 0.5],
         autorange=False,
     )
     fig.update_layout(

@@ -13,9 +13,12 @@ def test_classify_bsr_boundaries() -> None:
     assert classify_bsr(1) == RankTier.TOP_10
     assert classify_bsr(10) == RankTier.TOP_10
     assert classify_bsr(11) == RankTier.TOP_100
+    assert classify_bsr(2_000) == RankTier.TOP_2K
+    assert classify_bsr(2_001) == RankTier.TOP_10K
     assert classify_bsr(10_000) == RankTier.TOP_10K
     assert classify_bsr(10_001) == RankTier.TOP_50K
-    assert classify_bsr(150_001) == RankTier.BEYOND_150K
+    assert classify_bsr(50_000) == RankTier.TOP_50K
+    assert classify_bsr(50_001) == RankTier.LONG_TAIL
 
 
 def test_daily_resample_uses_last_point_of_day() -> None:
