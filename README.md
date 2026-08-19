@@ -31,7 +31,7 @@ KEEPA_API_KEY=tu_clave_keepa
 GEMINI_API_KEY=tu_clave_gemini
 GOOGLE_BOOKS_API_KEY=tu_clave_google_books   # opcional
 DEFAULT_AMAZON_DOMAIN=es
-GEMINI_MODEL=gemini-2.5-flash-lite
+GEMINI_MODEL=gemini-3.5-flash-lite
 ```
 
 ## Uso (Streamlit)

@@ -4,6 +4,7 @@ from book_sales_tracker.bsr_processor import filter_and_resample_daily, summariz
 from book_sales_tracker.config import Settings
 from book_sales_tracker.google_books import (
     BookNotFoundError,
+    GoogleBooksError,
     fetch_by_isbn,
     normalize_isbn,
     search_by_title,
@@ -15,12 +16,54 @@ from book_sales_tracker.keepa_client import (
     fetch_product_by_isbn,
 )
 from book_sales_tracker.llm_estimator import LlmEstimatorError, estimate_sales
-from book_sales_tracker.marketplace import MarketplaceConfig, get_marketplace
-from book_sales_tracker.models import BookMetadata, PipelineResult
+from book_sales_tracker.marketplace import get_marketplace
+from book_sales_tracker.models import BookMetadata, KeepaProductInfo, PipelineResult
 
 
 class PipelineError(Exception):
     pass
+
+
+def _metadata_from_keepa(keepa: KeepaProductInfo, isbn: str) -> BookMetadata:
+    normalized = normalize_isbn(isbn)
+    isbn_13 = normalized if len(normalized) == 13 else None
+    isbn_10 = normalized if len(normalized) == 10 else None
+    return BookMetadata(
+        title=keepa.title or "Título no disponible",
+        isbn_13=isbn_13,
+        isbn_10=isbn_10,
+    )
+
+
+def _resolve_book_metadata(
+    settings: Settings,
+    *,
+    isbn: str | None,
+    book: BookMetadata | None,
+    marketplace,
+) -> BookMetadata:
+    if book is not None:
+        return book
+    if not isbn:
+        raise PipelineError("Se requiere ISBN o metadatos de libro.")
+
+    if settings.google_books_api_key:
+        try:
+            return fetch_by_isbn(
+                isbn,
+                marketplace,
+                api_key=settings.google_books_api_key,
+            )
+        except BookNotFoundError as exc:
+            raise PipelineError(str(exc)) from exc
+        except GoogleBooksError:
+            pass
+
+    return BookMetadata(
+        title="Pendiente de Keepa",
+        isbn_13=normalize_isbn(isbn) if len(normalize_isbn(isbn)) == 13 else None,
+        isbn_10=normalize_isbn(isbn) if len(normalize_isbn(isbn)) == 10 else None,
+    )
 
 
 def run_pipeline(
@@ -36,18 +79,7 @@ def run_pipeline(
         raise PipelineError("La fecha de inicio debe ser anterior o igual a la fecha de fin.")
 
     marketplace = get_marketplace(marketplace_code)
-
-    if book is None:
-        if not isbn:
-            raise PipelineError("Se requiere ISBN o metadatos de libro.")
-        try:
-            book = fetch_by_isbn(
-                isbn,
-                marketplace,
-                api_key=settings.google_books_api_key,
-            )
-        except BookNotFoundError as exc:
-            raise PipelineError(str(exc)) from exc
+    book = _resolve_book_metadata(settings, isbn=isbn, book=book, marketplace=marketplace)
 
     resolved_isbn = book.isbn_13 or book.isbn_10 or (normalize_isbn(isbn) if isbn else None)
     if not resolved_isbn:
@@ -65,6 +97,9 @@ def run_pipeline(
         raise PipelineError(str(exc)) from exc
     except KeepaError as exc:
         raise PipelineError(str(exc)) from exc
+
+    if book.title == "Pendiente de Keepa" or not book.title:
+        book = _metadata_from_keepa(keepa_info, resolved_isbn)
 
     points = filter_and_resample_daily(raw_series, start_date, end_date)
     if not points:

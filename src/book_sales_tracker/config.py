@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     google_books_api_key: str | None = Field(default=None, alias="GOOGLE_BOOKS_API_KEY")
 
     default_amazon_domain: str = Field(default="es", alias="DEFAULT_AMAZON_DOMAIN")
-    gemini_model: str = Field(default="gemini-2.5-flash-lite", alias="GEMINI_MODEL")
+    gemini_model: str = Field(default="gemini-3.5-flash-lite", alias="GEMINI_MODEL")
     output_language: str = Field(default="es", alias="OUTPUT_LANGUAGE")
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
