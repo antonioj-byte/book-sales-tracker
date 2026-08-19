@@ -7,7 +7,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT_DIR))
 
-from lib.config import DEFAULT_DB_PATH, get_settings  # noqa: E402
+from lib.config import DEFAULT_DB_PATH, get_monitor_settings  # noqa: E402
 from lib.db import SCHEMA_SQL, connect, init_schema  # noqa: E402
 
 
@@ -21,7 +21,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    settings = get_settings(db_path=args.db_path)
+    settings = get_monitor_settings(db_path=args.db_path)
     conn = connect(settings.db_path)
     init_schema(conn)
 

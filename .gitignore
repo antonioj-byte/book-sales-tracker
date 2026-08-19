@@ -11,4 +11,5 @@ __pycache__/
 .streamlit/secrets.toml
 keepa-monitor/db/*.db
 keepa-monitor/logs/*.log
+keepa-monitor/reports/
 keepa-monitor/.env

@@ -16,7 +16,7 @@ from lib.config import (  # noqa: E402
     CATEGORIES_CSV,
     LOGS_DIR,
     TRACKED_ASINS_CSV,
-    get_settings,
+    get_fetch_settings,
 )
 from lib.db import (  # noqa: E402
     category_tree_last_updated,
@@ -241,7 +241,7 @@ def main() -> None:
     parser.add_argument("--skip-category-tree", action="store_true")
     args = parser.parse_args()
 
-    settings = get_settings(db_path=args.db_path)
+    settings = get_fetch_settings(db_path=args.db_path)
     now = datetime.now(timezone.utc)
     now_iso = now.isoformat()
     snapshot_date = now.date().isoformat()

@@ -194,3 +194,40 @@ def category_tree_last_updated(conn: sqlite3.Connection, domain_id: int) -> str 
     if row and row["last_update"]:
         return str(row["last_update"])
     return None
+
+
+def get_latest_snapshot_date(conn: sqlite3.Connection, table: str) -> str | None:
+    row = conn.execute(f"SELECT MAX(snapshot_date) AS d FROM {table}").fetchone()
+    return str(row["d"]) if row and row["d"] else None
+
+
+def get_snapshot_date_on_or_before(
+    conn: sqlite3.Connection,
+    table: str,
+    target_date: str,
+) -> str | None:
+    row = conn.execute(
+        f"SELECT MAX(snapshot_date) AS d FROM {table} WHERE snapshot_date <= ?",
+        (target_date,),
+    ).fetchone()
+    return str(row["d"]) if row and row["d"] else None
+
+
+def insert_alert(conn: sqlite3.Connection, row: dict[str, Any]) -> None:
+    conn.execute(
+        """
+        INSERT INTO alerts (
+            alert_date, module, alert_type, domain_id, asin, category_id,
+            rank_before, rank_after, delta_pct, message, created_at
+        ) VALUES (
+            :alert_date, :module, :alert_type, :domain_id, :asin, :category_id,
+            :rank_before, :rank_after, :delta_pct, :message, :created_at
+        )
+        """,
+        row,
+    )
+
+
+def delete_alerts_for_date(conn: sqlite3.Connection, alert_date: str) -> None:
+    conn.execute("DELETE FROM alerts WHERE alert_date = ?", (alert_date,))
+
