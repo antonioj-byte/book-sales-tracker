@@ -59,6 +59,7 @@ class PublisherCatalogResult(BaseModel):
     in_date_range: int = 0
     with_isbn: int = 0
     queries_tried: list[str] = Field(default_factory=list)
+    matched_years: dict[int, int] = Field(default_factory=dict)
 
 
 class BsrPoint(BaseModel):

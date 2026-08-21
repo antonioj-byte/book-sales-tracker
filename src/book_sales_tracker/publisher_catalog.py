@@ -96,10 +96,20 @@ def _render_empty_catalog_help(catalog_result, pub_start: str, pub_end: str) -> 
         f"- En ventana {pub_start} → {pub_end}: **{catalog_result.in_date_range}**\n"
         f"- Con ISBN: **{catalog_result.with_isbn}**"
     )
-    st.info(
-        "Prueba ampliar las fechas de publicación, elige otra editorial sugerida "
-        "o revisa que el nombre coincida con el registrado en Google Books."
-    )
+    years = getattr(catalog_result, "matched_years", None) or {}
+    if years:
+        year_summary = ", ".join(
+            f"**{year}** ({count})" for year, count in sorted(years.items(), reverse=True)
+        )
+        st.info(
+            f"Google Books sí devolvió títulos de esta editorial, pero en otros años: {year_summary}. "
+            "Amplía el rango de fechas o comprueba que el periodo coincida con lo indexado en Google Books."
+        )
+    else:
+        st.info(
+            "Prueba ampliar las fechas de publicación, elige otra editorial sugerida "
+            "o revisa que el nombre coincida con el registrado en Google Books."
+        )
 
 
 def render_publisher_catalog_tab(settings) -> None:

@@ -209,6 +209,31 @@ def _publisher_search_queries(query: str) -> list[str]:
     ]
 
 
+def _publisher_search_queries_for_range(
+    query: str,
+    pub_start: date,
+    pub_end: date,
+) -> list[tuple[str, bool]]:
+    """Consultas Google Books; el flag indica búsqueda acotada por año."""
+    seen: set[str] = set()
+    result: list[tuple[str, bool]] = []
+
+    def add(search_query: str, year_scoped: bool) -> None:
+        if search_query in seen:
+            return
+        seen.add(search_query)
+        result.append((search_query, year_scoped))
+
+    for search_query in _publisher_search_queries(query):
+        add(search_query, False)
+
+    for year in range(pub_start.year, pub_end.year + 1):
+        add(f"inpublisher:{query} {year}", True)
+        add(f'inpublisher:"{query}" {year}', True)
+
+    return result
+
+
 def _fetch_volume_pages(
     query: str,
     marketplace: MarketplaceConfig,
@@ -329,13 +354,17 @@ def search_publisher_catalog(
     in_date_range = 0
     with_isbn = 0
     queries_tried: list[str] = []
+    matched_years: dict[int, int] = {}
 
     transient_errors = 0
-    for search_query in _publisher_search_queries(publisher_confirmed):
+    for search_query, year_scoped in _publisher_search_queries_for_range(
+        publisher_confirmed, pub_start, pub_end
+    ):
         queries_tried.append(search_query)
+        page_limit = 40 if year_scoped else max_results * 3
         try:
             items = _fetch_volume_pages(
-                search_query, marketplace, api_key, max_volumes=max_results * 3
+                search_query, marketplace, api_key, max_volumes=page_limit
             )
         except GoogleBooksUnavailableError:
             transient_errors += 1
@@ -354,6 +383,9 @@ def search_publisher_catalog(
             if not _publisher_names_match(publisher_confirmed, metadata.publisher):
                 continue
             matched_publisher += 1
+            pub_start_date, _ = _parse_published_date(metadata.published_date)
+            if pub_start_date is not None:
+                matched_years[pub_start_date.year] = matched_years.get(pub_start_date.year, 0) + 1
 
             if not _publication_overlaps_range(metadata.published_date, pub_start, pub_end):
                 continue
@@ -372,7 +404,9 @@ def search_publisher_catalog(
         if len(collected) >= max_results:
             break
 
-    if not collected and transient_errors == len(_publisher_search_queries(publisher_confirmed)):
+    if not collected and transient_errors == len(
+        _publisher_search_queries_for_range(publisher_confirmed, pub_start, pub_end)
+    ):
         raise GoogleBooksUnavailableError(
             "Google Books no está disponible temporalmente. "
             "Espera unos segundos e inténtalo de nuevo."
@@ -388,6 +422,7 @@ def search_publisher_catalog(
         in_date_range=in_date_range,
         with_isbn=with_isbn,
         queries_tried=queries_tried,
+        matched_years=matched_years,
     )
 
 
