@@ -1,6 +1,7 @@
 import calendar
 import re
 import time
+from collections.abc import Callable
 from datetime import date, datetime
 
 import httpx
@@ -78,8 +79,17 @@ def _request_volumes(params: dict, api_key: str | None) -> dict:
 
     last_error: Exception | None = None
     for attempt in range(MAX_RETRIES):
-        with httpx.Client(timeout=30.0) as client:
-            response = client.get(GOOGLE_BOOKS_BASE, params=query_params)
+        try:
+            with httpx.Client(timeout=30.0) as client:
+                response = client.get(GOOGLE_BOOKS_BASE, params=query_params)
+        except httpx.RequestError as exc:
+            last_error = exc
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            raise GoogleBooksUnavailableError(
+                "No se pudo conectar con Google Books. Comprueba la red e inténtalo de nuevo."
+            ) from exc
 
         if response.status_code == 429 and attempt < MAX_RETRIES - 1:
             time.sleep(2 ** attempt)
@@ -123,6 +133,7 @@ def fetch_by_isbn(
         {
             "q": f"isbn:{normalized}",
             "country": marketplace.google_books_country,
+            "langRestrict": marketplace.google_books_lang,
             "maxResults": 5,
         },
         api_key,
@@ -130,6 +141,11 @@ def fetch_by_isbn(
     if payload.get("totalItems", 0) == 0 or not payload.get("items"):
         raise BookNotFoundError(f"No se encontró ningún libro con ISBN {normalized}")
 
+    for item in payload["items"]:
+        metadata = _parse_volume(item)
+        for candidate in (metadata.isbn_13, metadata.isbn_10):
+            if candidate and normalize_isbn(candidate) == normalized:
+                return metadata
     return _parse_volume(payload["items"][0])
 
 
@@ -340,6 +356,7 @@ def search_publisher_catalog(
     pub_end: date,
     api_key: str | None = None,
     max_results: int = 120,
+    on_progress: Callable[[str], None] | None = None,
 ) -> PublisherCatalogResult:
     publisher_confirmed = publisher_confirmed.strip()
     if not publisher_confirmed:
@@ -357,10 +374,11 @@ def search_publisher_catalog(
     matched_years: dict[int, int] = {}
 
     transient_errors = 0
-    for search_query, year_scoped in _publisher_search_queries_for_range(
-        publisher_confirmed, pub_start, pub_end
-    ):
+    query_plan = _publisher_search_queries_for_range(publisher_confirmed, pub_start, pub_end)
+    for query_index, (search_query, year_scoped) in enumerate(query_plan, start=1):
         queries_tried.append(search_query)
+        if on_progress:
+            on_progress(f"Consulta {query_index}/{len(query_plan)}: {search_query[:60]}…")
         page_limit = 40 if year_scoped else max_results * 3
         try:
             items = _fetch_volume_pages(
@@ -404,9 +422,7 @@ def search_publisher_catalog(
         if len(collected) >= max_results:
             break
 
-    if not collected and transient_errors == len(
-        _publisher_search_queries_for_range(publisher_confirmed, pub_start, pub_end)
-    ):
+    if not collected and transient_errors == len(query_plan):
         raise GoogleBooksUnavailableError(
             "Google Books no está disponible temporalmente. "
             "Espera unos segundos e inténtalo de nuevo."

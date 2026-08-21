@@ -112,6 +112,60 @@ def _render_empty_catalog_help(catalog_result, pub_start: str, pub_end: str) -> 
         )
 
 
+def _load_publisher_catalog(
+    settings,
+    *,
+    publisher: str,
+    marketplace_code: str,
+    marketplace_label: str,
+    pub_start: date,
+    pub_end: date,
+    max_results: int,
+) -> None:
+    if pub_start > pub_end:
+        st.error("La fecha de inicio debe ser anterior o igual a la de fin.")
+        return
+
+    marketplace = get_marketplace(marketplace_code)
+    progress = st.progress(0.0, text="Iniciando búsqueda en Google Books…")
+
+    def on_progress(message: str) -> None:
+        progress.progress(0.0, text=message)
+
+    try:
+        with st.spinner(f"Cargando catálogo de «{publisher}»…"):
+            catalog_result = search_publisher_catalog(
+                publisher,
+                marketplace,
+                pub_start=pub_start,
+                pub_end=pub_end,
+                api_key=settings.google_books_api_key,
+                max_results=max_results,
+                on_progress=on_progress,
+            )
+    except GoogleBooksUnavailableError as exc:
+        st.warning(str(exc))
+        return
+    except (GoogleBooksError, ValueError) as exc:
+        st.error(str(exc))
+        return
+    finally:
+        progress.empty()
+
+    st.session_state["publisher_catalog"] = {
+        "publisher": publisher,
+        "books": [book.model_dump() for book in catalog_result.books],
+        "stats": catalog_result.model_dump(),
+        "marketplace_code": marketplace_code,
+        "marketplace_label": marketplace_label,
+        "pub_start": pub_start.isoformat(),
+        "pub_end": pub_end.isoformat(),
+    }
+    st.session_state.pop("publisher_catalog_results", None)
+    st.session_state.pop("publisher_catalog_errors", None)
+    st.session_state.pop("publisher_catalog_perf_key", None)
+
+
 def render_publisher_catalog_tab(settings) -> None:
     st.subheader("Catálogo editorial")
     st.caption(
@@ -159,6 +213,9 @@ def render_publisher_catalog_tab(settings) -> None:
         if not settings.google_books_api_key:
             st.error("Configura `GOOGLE_BOOKS_API_KEY`.")
             return
+        if pub_start > pub_end:
+            st.error("La fecha de inicio debe ser anterior o igual a la de fin.")
+            return
 
         marketplace = get_marketplace(marketplace_labels[marketplace_label])
         with st.spinner(f"Buscando editoriales similares a «{publisher_query}»…"):
@@ -195,41 +252,54 @@ def render_publisher_catalog_tab(settings) -> None:
     suggestions = [PublisherSuggestion(**item) for item in suggestion_state["suggestions"]]
     st.markdown(f"**Búsqueda:** «{suggestion_state['query']}»")
 
+    st.markdown("#### Parámetros del catálogo")
+    st.caption(
+        "Ajusta fechas y mercado antes de cargar. Google Books puede tardar 20–60 s "
+        "según el rango de años."
+    )
+    catalog_cols = st.columns(2)
+    catalog_pub_start = catalog_cols[0].date_input(
+        "Publicado desde",
+        value=date.fromisoformat(suggestion_state["pub_start"]),
+        key="catalog_pub_start",
+    )
+    catalog_pub_end = catalog_cols[1].date_input(
+        "Publicado hasta",
+        value=date.fromisoformat(suggestion_state["pub_end"]),
+        key="catalog_pub_end",
+    )
+    catalog_marketplace_label = st.selectbox(
+        "Mercado Google Books / Keepa",
+        options=list(marketplace_labels.keys()),
+        index=list(marketplace_labels.keys()).index(
+            next(
+                (
+                    label
+                    for label, code in marketplace_labels.items()
+                    if code == suggestion_state["marketplace_code"]
+                ),
+                list(marketplace_labels.keys())[0],
+            )
+        ),
+        key="catalog_marketplace",
+    )
+    catalog_marketplace_code = marketplace_labels[catalog_marketplace_label]
+
     if not suggestions:
         st.warning(
             "No encontramos editoriales parecidas en Google Books. "
             "Prueba otro nombre, menos palabras o sin acentos."
         )
         if st.button("Usar mi texto tal cual y cargar catálogo", type="primary"):
-            marketplace = get_marketplace(suggestion_state["marketplace_code"])
-            pub_start = date.fromisoformat(suggestion_state["pub_start"])
-            pub_end = date.fromisoformat(suggestion_state["pub_end"])
-            with st.spinner(f"Cargando catálogo de «{suggestion_state['query']}»…"):
-                try:
-                    catalog_result = search_publisher_catalog(
-                        suggestion_state["query"],
-                        marketplace,
-                        pub_start=pub_start,
-                        pub_end=pub_end,
-                        api_key=settings.google_books_api_key,
-                        max_results=30,
-                    )
-                except GoogleBooksUnavailableError as exc:
-                    st.warning(str(exc))
-                    return
-                except (GoogleBooksError, ValueError) as exc:
-                    st.error(str(exc))
-                    return
-            st.session_state["publisher_catalog"] = {
-                "publisher": suggestion_state["query"],
-                "books": [book.model_dump() for book in catalog_result.books],
-                "stats": catalog_result.model_dump(),
-                "marketplace_code": suggestion_state["marketplace_code"],
-                "marketplace_label": suggestion_state["marketplace_label"],
-                "pub_start": suggestion_state["pub_start"],
-                "pub_end": suggestion_state["pub_end"],
-            }
-            st.rerun()
+            _load_publisher_catalog(
+                settings,
+                publisher=suggestion_state["query"],
+                marketplace_code=catalog_marketplace_code,
+                marketplace_label=catalog_marketplace_label,
+                pub_start=catalog_pub_start,
+                pub_end=catalog_pub_end,
+                max_results=30,
+            )
         return
 
     st.markdown("#### Confirma la editorial")
@@ -254,38 +324,15 @@ def render_publisher_catalog_tab(settings) -> None:
             st.error("Configura `GOOGLE_BOOKS_API_KEY`.")
             return
 
-        marketplace = get_marketplace(suggestion_state["marketplace_code"])
-        pub_start = date.fromisoformat(suggestion_state["pub_start"])
-        pub_end = date.fromisoformat(suggestion_state["pub_end"])
-
-        with st.spinner(f"Cargando catálogo de «{confirmed_publisher}»…"):
-            try:
-                catalog_result = search_publisher_catalog(
-                    confirmed_publisher,
-                    marketplace,
-                    pub_start=pub_start,
-                    pub_end=pub_end,
-                    api_key=settings.google_books_api_key,
-                    max_results=max_titles,
-                )
-            except GoogleBooksUnavailableError as exc:
-                st.warning(str(exc))
-                return
-            except (GoogleBooksError, ValueError) as exc:
-                st.error(str(exc))
-                return
-
-        st.session_state["publisher_catalog"] = {
-            "publisher": confirmed_publisher,
-            "books": [book.model_dump() for book in catalog_result.books],
-            "stats": catalog_result.model_dump(),
-            "marketplace_code": suggestion_state["marketplace_code"],
-            "marketplace_label": suggestion_state["marketplace_label"],
-            "pub_start": suggestion_state["pub_start"],
-            "pub_end": suggestion_state["pub_end"],
-        }
-        st.session_state.pop("publisher_catalog_results", None)
-        st.session_state.pop("publisher_catalog_errors", None)
+        _load_publisher_catalog(
+            settings,
+            publisher=confirmed_publisher,
+            marketplace_code=catalog_marketplace_code,
+            marketplace_label=catalog_marketplace_label,
+            pub_start=catalog_pub_start,
+            pub_end=catalog_pub_end,
+            max_results=max_titles,
+        )
 
     catalog_state = st.session_state.get("publisher_catalog")
     if not catalog_state:
@@ -321,6 +368,10 @@ def render_publisher_catalog_tab(settings) -> None:
         return
 
     st.dataframe(_catalog_dataframe(books), use_container_width=True, hide_index=True)
+    st.caption(
+        "Nota: títulos muy recientes (ISBN 979…) pueden aparecer en Google Books "
+        "pero aún no estar indexados en Keepa para el marketplace elegido."
+    )
 
     st.markdown("#### Analizar performance BSR (Keepa)")
     perf_cols = st.columns(2)
@@ -334,39 +385,63 @@ def render_publisher_catalog_tab(settings) -> None:
         value=date.today(),
         key="pub_perf_end",
     )
-    st.caption(f"Coste estimado Keepa: ~{len(books)} tokens (1 por ISBN). Sin Gemini.")
+    st.caption(
+        f"Coste estimado Keepa: ~{min(len(books), 30)} tokens (1 por ISBN, máx. 30). Sin Gemini."
+    )
+
+    perf_key = f"{perf_start.isoformat()}_{perf_end.isoformat()}"
+    stored_perf_key = st.session_state.get("publisher_catalog_perf_key")
+    if stored_perf_key and stored_perf_key != perf_key:
+        st.info("Has cambiado las fechas de performance. Pulsa **Analizar catálogo con Keepa** de nuevo.")
 
     if st.button("Analizar catálogo con Keepa", type="primary"):
+        if perf_start > perf_end:
+            st.error("La fecha de inicio debe ser anterior o igual a la fecha de fin.")
+            return
+
+        books_to_analyze = books[:30]
+        if len(books) > 30:
+            st.warning(f"Se analizan solo los primeros **30** títulos (de {len(books)}).")
+
         results: list[PipelineResult] = []
         errors: list[str] = []
         progress = st.progress(0.0, text="Consultando Keepa…")
 
-        for index, book in enumerate(books):
-            progress.progress(
-                (index + 1) / len(books),
-                text=f"{index + 1}/{len(books)} — {book.title[:40]}…",
-            )
-            isbn = book.isbn_13 or book.isbn_10
-            try:
-                result = run_pipeline(
-                    settings,
-                    isbn=isbn,
-                    book=book,
-                    marketplace_code=catalog_state["marketplace_code"],
-                    start_date=perf_start,
-                    end_date=perf_end,
-                    include_estimate=False,
+        try:
+            for index, book in enumerate(books_to_analyze):
+                progress.progress(
+                    (index + 1) / len(books_to_analyze),
+                    text=f"{index + 1}/{len(books_to_analyze)} — {book.title[:40]}…",
                 )
-                results.append(result)
-            except PipelineError as exc:
-                errors.append(f"{book.title}: {exc}")
+                isbn = book.isbn_13 or book.isbn_10
+                try:
+                    result = run_pipeline(
+                        settings,
+                        isbn=isbn,
+                        book=book,
+                        marketplace_code=catalog_state["marketplace_code"],
+                        start_date=perf_start,
+                        end_date=perf_end,
+                        include_estimate=False,
+                    )
+                    results.append(result)
+                except PipelineError as exc:
+                    errors.append(f"{book.title}: {exc}")
+                except Exception as exc:
+                    errors.append(f"{book.title}: error inesperado — {exc}")
+        finally:
+            progress.empty()
 
-        progress.empty()
         st.session_state["publisher_catalog_results"] = results
         st.session_state["publisher_catalog_errors"] = errors
+        st.session_state["publisher_catalog_perf_key"] = perf_key
 
     results = st.session_state.get("publisher_catalog_results") or []
     errors = st.session_state.get("publisher_catalog_errors") or []
+
+    if stored_perf_key and stored_perf_key != perf_key:
+        results = []
+        errors = []
 
     for message in errors:
         st.error(message)

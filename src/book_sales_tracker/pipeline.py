@@ -5,6 +5,7 @@ from book_sales_tracker.config import Settings
 from book_sales_tracker.google_books import (
     BookNotFoundError,
     GoogleBooksError,
+    GoogleBooksUnavailableError,
     fetch_by_isbn,
     normalize_isbn,
     search_by_title,
@@ -56,8 +57,13 @@ def _resolve_book_metadata(
             )
         except BookNotFoundError as exc:
             raise PipelineError(str(exc)) from exc
-        except GoogleBooksError:
-            pass
+        except GoogleBooksUnavailableError as exc:
+            raise PipelineError(str(exc)) from exc
+        except GoogleBooksError as exc:
+            raise PipelineError(
+                f"No se pudieron obtener metadatos de Google Books: {exc}. "
+                "Se intentará resolver el título con Keepa."
+            ) from exc
 
     return BookMetadata(
         title="Pendiente de Keepa",
@@ -78,6 +84,12 @@ def run_pipeline(
 ) -> PipelineResult:
     if start_date > end_date:
         raise PipelineError("La fecha de inicio debe ser anterior o igual a la fecha de fin.")
+
+    if include_estimate and not settings.has_gemini:
+        raise PipelineError(
+            "Configura `GEMINI_API_KEY` en `.env` para la estimación IA, "
+            "o usa el comparador de ISBNs (solo BSR)."
+        )
 
     marketplace = get_marketplace(marketplace_code)
     book = _resolve_book_metadata(settings, isbn=isbn, book=book, marketplace=marketplace)
@@ -151,6 +163,10 @@ def resolve_book_by_title(
     title: str,
     marketplace_code: str,
 ):
+    if not settings.google_books_api_key:
+        raise PipelineError(
+            "Configura `GOOGLE_BOOKS_API_KEY` en `.env` para buscar por título."
+        )
     marketplace = get_marketplace(marketplace_code)
     return search_by_title(
         title,

@@ -120,6 +120,12 @@ def render_comparator_tab(settings) -> None:
     if len(isbns) < 2:
         st.error("Introduce al menos **2 ISBNs** distintos.")
         return
+    if start_date > end_date:
+        st.error("La fecha de inicio debe ser anterior o igual a la fecha de fin.")
+        return
+    if len(isbns) > 10:
+        st.error("Máximo **10 ISBNs** por comparación (1 token Keepa por ISBN).")
+        return
     if len(isbns) > 6:
         st.warning("Máximo recomendado: 6 ISBNs por comparación (coste Keepa: 1 token/ISBN).")
 
@@ -128,23 +134,26 @@ def render_comparator_tab(settings) -> None:
     errors: list[str] = []
 
     progress = st.progress(0, text="Consultando Keepa…")
-    for index, isbn in enumerate(isbns):
-        progress.progress((index + 1) / len(isbns), text=f"Consultando {isbn}…")
-        try:
-            result = run_pipeline(
-                settings,
-                isbn=isbn,
-                book=None,
-                marketplace_code=marketplace_code,
-                start_date=start_date,
-                end_date=end_date,
-                include_estimate=False,
-            )
-            results.append(result)
-        except PipelineError as exc:
-            errors.append(f"{isbn}: {exc}")
-
-    progress.empty()
+    try:
+        for index, isbn in enumerate(isbns):
+            progress.progress((index + 1) / len(isbns), text=f"Consultando {isbn}…")
+            try:
+                result = run_pipeline(
+                    settings,
+                    isbn=isbn,
+                    book=None,
+                    marketplace_code=marketplace_code,
+                    start_date=start_date,
+                    end_date=end_date,
+                    include_estimate=False,
+                )
+                results.append(result)
+            except PipelineError as exc:
+                errors.append(f"{isbn}: {exc}")
+            except Exception as exc:
+                errors.append(f"{isbn}: error inesperado — {exc}")
+    finally:
+        progress.empty()
 
     for message in errors:
         st.error(message)

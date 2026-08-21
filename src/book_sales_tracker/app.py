@@ -137,6 +137,13 @@ def _render_analysis_tab(settings) -> None:
     st.subheader("Análisis ISBN")
     st.caption("Evolución de un solo libro: BSR, tramos, estimación IA (Keepa + Gemini).")
 
+    if not settings.has_gemini:
+        st.warning(
+            "Falta `GEMINI_API_KEY` en `.env`. Puedes usar **Comparador ISBN** (solo BSR) "
+            "o **Catálogo editorial** sin estimación IA."
+        )
+        return
+
     marketplace_options = list_marketplace_options()
     marketplace_labels = {label: code for code, label in marketplace_options}
     default_marketplace = settings.default_amazon_domain
@@ -173,6 +180,9 @@ def _render_analysis_tab(settings) -> None:
         if not query.strip():
             st.error("Introduce un ISBN o título.")
             return
+        if start_date > end_date:
+            st.error("La fecha de inicio debe ser anterior o igual a la fecha de fin.")
+            return
 
         marketplace_code = marketplace_labels[marketplace_label]
         if search_mode == "ISBN":
@@ -185,13 +195,29 @@ def _render_analysis_tab(settings) -> None:
                 end_date=end_date,
             )
         else:
-            try:
-                search_results = resolve_book_by_title(settings, query, marketplace_code)
-            except BookNotFoundError as exc:
-                st.error(str(exc))
+            if not settings.google_books_api_key:
+                st.error("Configura `GOOGLE_BOOKS_API_KEY` en `.env` para buscar por título.")
                 return
-            except Exception as exc:
-                st.error(f"Error al buscar en Google Books: {exc}")
+            with st.spinner("Buscando títulos en Google Books…"):
+                try:
+                    search_results = resolve_book_by_title(settings, query, marketplace_code)
+                except BookNotFoundError as exc:
+                    st.error(str(exc))
+                    return
+                except PipelineError as exc:
+                    st.error(str(exc))
+                    return
+                except Exception as exc:
+                    st.error(f"Error al buscar en Google Books: {exc}")
+                    return
+
+            search_results = [
+                result
+                for result in search_results
+                if result.metadata.isbn_13 or result.metadata.isbn_10
+            ]
+            if not search_results:
+                st.error("Ningún resultado tiene ISBN. Prueba con búsqueda por ISBN directamente.")
                 return
 
             if len(search_results) == 1:
@@ -221,6 +247,9 @@ def _render_analysis_tab(settings) -> None:
             selected_book = next(
                 result.metadata for result in results if result.display_label == chosen
             )
+            if not (selected_book.isbn_13 or selected_book.isbn_10):
+                st.error("El libro seleccionado no tiene ISBN. Elige otro resultado.")
+                return
             st.session_state.pop("pending_title_search", None)
             _run_analysis(
                 settings,
@@ -276,7 +305,7 @@ def main() -> None:
         except Exception as exc:
             st.error(
                 "No se pudo cargar la configuración. Crea un `.env` con "
-                "`KEEPA_API_KEY` y `GEMINI_API_KEY`. "
+                "`KEEPA_API_KEY` (y `GEMINI_API_KEY` para esta pestaña). "
                 f"Detalle: {exc}"
             )
         else:

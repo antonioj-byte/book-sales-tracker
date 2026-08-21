@@ -1,3 +1,4 @@
+import time
 from datetime import datetime, timezone
 
 import httpx
@@ -7,6 +8,7 @@ from book_sales_tracker.models import KeepaProductInfo
 
 KEEPA_BASE = "https://api.keepa.com/product"
 KEEPA_EPOCH_OFFSET_MINUTES = 21564000
+MAX_RETRIES = 3
 
 
 class KeepaError(Exception):
@@ -51,7 +53,6 @@ def _extract_bsr_series(product: dict) -> tuple[list[tuple[datetime, int]], int 
 
     candidates: list[tuple[str, list[tuple[datetime, int]]]] = []
 
-    # csv[3] = SALES: histórico principal de BSR, a menudo más completo que salesRanks[ref]
     if len(csv_data) > 3 and csv_data[3]:
         candidates.append(("csv_sales", _parse_sales_rank_series(csv_data[3])))
 
@@ -65,7 +66,6 @@ def _extract_bsr_series(product: dict) -> tuple[list[tuple[datetime, int]], int 
             "No se encontró histórico de BSR para la categoría principal del producto."
         )
 
-    # Preferir la serie que llega más atrás en el tiempo (mismo ranking cuando solapan)
     _, best_series = min(
         candidates,
         key=lambda item: item[1][0][0]
@@ -90,10 +90,33 @@ def fetch_product_by_isbn(
         "history": 1,
     }
 
-    with httpx.Client(timeout=60.0) as client:
-        response = client.get(KEEPA_BASE, params=params)
-        response.raise_for_status()
-        payload = response.json()
+    last_error: Exception | None = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            with httpx.Client(timeout=60.0) as client:
+                response = client.get(KEEPA_BASE, params=params)
+            response.raise_for_status()
+            payload = response.json()
+            break
+        except httpx.HTTPStatusError as exc:
+            last_error = exc
+            status = exc.response.status_code
+            if status in {429, 500, 502, 503, 504} and attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            if status == 429:
+                raise KeepaError(
+                    "Keepa ha limitado la petición (429). Espera unos segundos e inténtalo de nuevo."
+                ) from exc
+            raise KeepaError(f"Keepa devolvió HTTP {status}.") from exc
+        except httpx.RequestError as exc:
+            last_error = exc
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(2 ** attempt)
+                continue
+            raise KeepaError(f"No se pudo conectar con Keepa: {exc}") from exc
+    else:
+        raise KeepaError(f"Keepa no respondió tras varios intentos: {last_error}")
 
     if payload.get("error"):
         raise KeepaError(f"Keepa API error: {payload['error']}")

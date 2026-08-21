@@ -12,8 +12,12 @@ class Settings(BaseSettings):
     )
 
     keepa_api_key: str = Field(..., alias="KEEPA_API_KEY")
-    gemini_api_key: str = Field(..., alias="GEMINI_API_KEY")
+    gemini_api_key: str | None = Field(default=None, alias="GEMINI_API_KEY")
     google_books_api_key: str | None = Field(default=None, alias="GOOGLE_BOOKS_API_KEY")
+
+    @property
+    def has_gemini(self) -> bool:
+        return bool((self.gemini_api_key or "").strip())
 
     default_amazon_domain: str = Field(default="es", alias="DEFAULT_AMAZON_DOMAIN")
     gemini_model: str = Field(default="gemini-3.5-flash-lite", alias="GEMINI_MODEL")
