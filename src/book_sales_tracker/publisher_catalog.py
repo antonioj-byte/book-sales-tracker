@@ -8,6 +8,7 @@ import streamlit as st
 
 from book_sales_tracker.google_books import (
     GoogleBooksError,
+    GoogleBooksUnavailableError,
     discover_publishers,
     search_publisher_catalog,
 )
@@ -157,6 +158,9 @@ def render_publisher_catalog_tab(settings) -> None:
                     marketplace,
                     api_key=settings.google_books_api_key,
                 )
+            except GoogleBooksUnavailableError as exc:
+                st.warning(str(exc))
+                return
             except (GoogleBooksError, ValueError) as exc:
                 st.error(str(exc))
                 return
@@ -200,6 +204,9 @@ def render_publisher_catalog_tab(settings) -> None:
                         api_key=settings.google_books_api_key,
                         max_results=30,
                     )
+                except GoogleBooksUnavailableError as exc:
+                    st.warning(str(exc))
+                    return
                 except (GoogleBooksError, ValueError) as exc:
                     st.error(str(exc))
                     return
@@ -251,6 +258,9 @@ def render_publisher_catalog_tab(settings) -> None:
                     api_key=settings.google_books_api_key,
                     max_results=max_titles,
                 )
+            except GoogleBooksUnavailableError as exc:
+                st.warning(str(exc))
+                return
             except (GoogleBooksError, ValueError) as exc:
                 st.error(str(exc))
                 return

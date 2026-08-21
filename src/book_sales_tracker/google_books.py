@@ -14,11 +14,15 @@ from book_sales_tracker.models import (
 )
 
 GOOGLE_BOOKS_BASE = "https://www.googleapis.com/books/v1/volumes"
-MAX_RETRIES = 3
+MAX_RETRIES = 4
 
 
 class GoogleBooksError(Exception):
     pass
+
+
+class GoogleBooksUnavailableError(GoogleBooksError):
+    """Google Books respondió con un error transitorio (503, 429, etc.)."""
 
 
 class BookNotFoundError(GoogleBooksError):
@@ -92,10 +96,21 @@ def _request_volumes(params: dict, api_key: str | None) -> dict:
             if attempt < MAX_RETRIES - 1:
                 time.sleep(2 ** attempt)
                 continue
-            raise
+            status = exc.response.status_code
+            if status in {429, 500, 502, 503, 504}:
+                raise GoogleBooksUnavailableError(
+                    "Google Books no está disponible temporalmente "
+                    f"(HTTP {status}). Espera unos segundos e inténtalo de nuevo."
+                ) from exc
+            raise GoogleBooksError(
+                f"Google Books devolvió un error (HTTP {status}). "
+                "Revisa la clave `GOOGLE_BOOKS_API_KEY` o prueba otra búsqueda."
+            ) from exc
         return response.json()
 
-    raise GoogleBooksError(f"Google Books no respondió: {last_error}")
+    raise GoogleBooksUnavailableError(
+        "Google Books no respondió tras varios intentos. Inténtalo de nuevo en unos segundos."
+    ) from last_error
 
 
 def fetch_by_isbn(
@@ -188,9 +203,8 @@ def _publisher_names_match(confirmed: str, candidate: str | None) -> bool:
 def _publisher_search_queries(query: str) -> list[str]:
     query = query.strip()
     return [
-        f'inpublisher:"{query}"',
         f"inpublisher:{query}",
-        f'"{query}"',
+        f'inpublisher:"{query}"',
         query,
     ]
 
@@ -244,10 +258,17 @@ def discover_publishers(
     scores: dict[str, float] = {}
     seen_items: set[str] = set()
 
+    transient_errors = 0
     for search_query in _publisher_search_queries(query):
-        for item in _fetch_volume_pages(
-            search_query, marketplace, api_key, max_volumes=max_volumes
-        ):
+        try:
+            page_items = _fetch_volume_pages(
+                search_query, marketplace, api_key, max_volumes=max_volumes
+            )
+        except GoogleBooksUnavailableError:
+            transient_errors += 1
+            continue
+
+        for item in page_items:
             item_id = item.get("id") or str(item)
             if item_id in seen_items:
                 continue
@@ -277,7 +298,14 @@ def discover_publishers(
         for name, count in counts.items()
     ]
     suggestions.sort(key=lambda item: (item.match_score, item.volume_count), reverse=True)
-    return suggestions[:12]
+    if suggestions:
+        return suggestions[:12]
+    if transient_errors == len(_publisher_search_queries(query)):
+        raise GoogleBooksUnavailableError(
+            "Google Books no está disponible temporalmente. "
+            "Espera unos segundos e inténtalo de nuevo, o usa **Usar mi texto tal cual**."
+        )
+    return []
 
 
 def search_publisher_catalog(
@@ -302,11 +330,16 @@ def search_publisher_catalog(
     with_isbn = 0
     queries_tried: list[str] = []
 
+    transient_errors = 0
     for search_query in _publisher_search_queries(publisher_confirmed):
         queries_tried.append(search_query)
-        items = _fetch_volume_pages(
-            search_query, marketplace, api_key, max_volumes=max_results * 3
-        )
+        try:
+            items = _fetch_volume_pages(
+                search_query, marketplace, api_key, max_volumes=max_results * 3
+            )
+        except GoogleBooksUnavailableError:
+            transient_errors += 1
+            continue
         if not items:
             continue
 
@@ -338,6 +371,12 @@ def search_publisher_catalog(
 
         if len(collected) >= max_results:
             break
+
+    if not collected and transient_errors == len(_publisher_search_queries(publisher_confirmed)):
+        raise GoogleBooksUnavailableError(
+            "Google Books no está disponible temporalmente. "
+            "Espera unos segundos e inténtalo de nuevo."
+        )
 
     books = list(collected.values())
     books.sort(key=lambda book: book.published_date or "", reverse=True)
