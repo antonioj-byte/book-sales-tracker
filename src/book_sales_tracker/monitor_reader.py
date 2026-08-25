@@ -41,6 +41,163 @@ class AbsoluteRow:
     asin: str
 
 
+DOMAIN_SHORT: dict[int, str] = {
+    1: "EE.UU.",
+    2: "UK",
+    3: "Alemania",
+    4: "Francia",
+    8: "Italia",
+    9: "España",
+}
+
+FICTION_HINTS = ("literature", "fiction", "roman", "ficción", "ficcion", "romans")
+
+
+def short_market_label(domain_id: int) -> str:
+    return DOMAIN_SHORT.get(domain_id, domain_label(domain_id))
+
+
+def category_axis(category_name: str) -> str:
+    name = category_name.lower()
+    if any(hint in name for hint in FICTION_HINTS):
+        return "NF" if "non-fiction" in name or "no ficción" in name else "F"
+    return "NF"
+
+
+def _asins_for_snapshot(
+    conn: sqlite3.Connection,
+    *,
+    snapshot_date: str,
+    domain_id: int,
+    category_id: str,
+) -> set[str]:
+    rows = conn.execute(
+        """
+        SELECT asin FROM rank_snapshots_absolute
+        WHERE snapshot_date = ? AND domain_id = ? AND category_id = ?
+        """,
+        (snapshot_date, domain_id, category_id),
+    ).fetchall()
+    return {str(row["asin"]) for row in rows}
+
+
+def category_turnover_pct(
+    conn: sqlite3.Connection,
+    *,
+    domain_id: int,
+    category_id: str,
+    lookback_days: int = 7,
+) -> float | None:
+    latest = conn.execute(
+        """
+        SELECT MAX(snapshot_date) FROM rank_snapshots_absolute
+        WHERE domain_id = ? AND category_id = ?
+        """,
+        (domain_id, category_id),
+    ).fetchone()[0]
+    if not latest:
+        return None
+    previous = conn.execute(
+        """
+        SELECT MAX(snapshot_date) FROM rank_snapshots_absolute
+        WHERE domain_id = ? AND category_id = ?
+          AND snapshot_date <= date(?, ? || ' days')
+        """,
+        (domain_id, category_id, latest, f"-{lookback_days}"),
+    ).fetchone()[0]
+    if not previous or previous == latest:
+        return None
+    current = _asins_for_snapshot(conn, snapshot_date=str(latest), domain_id=domain_id, category_id=category_id)
+    before = _asins_for_snapshot(conn, snapshot_date=str(previous), domain_id=domain_id, category_id=category_id)
+    if not current or not before:
+        return None
+    changed = len(current.symmetric_difference(before))
+    return round(changed / max(len(current), 1) * 100, 1)
+
+
+def fetch_market_indices(
+    conn: sqlite3.Connection,
+    *,
+    domain_id: int,
+    lookback_days: int = 7,
+) -> list[dict]:
+    categories = list_categories(conn, domain_id=domain_id)
+    indices: list[dict] = []
+    for cat in categories:
+        category_id = str(cat["category_id"])
+        top = fetch_absolute_top(conn, domain_id=domain_id, category_id=category_id, limit=100)
+        turnover = category_turnover_pct(
+            conn, domain_id=domain_id, category_id=category_id, lookback_days=lookback_days
+        )
+        avg_pos = round(sum(r.rank_position for r in top[:10]) / min(len(top), 10), 1) if top else None
+        if turnover is None:
+            delta_text = "—"
+            delta_class = "neutral"
+        elif turnover > 0:
+            delta_text = f"▲ {turnover}% rotación"
+            delta_class = "positive" if turnover >= 15 else "neutral"
+        else:
+            delta_text = "→ estable"
+            delta_class = "neutral"
+        indices.append(
+            {
+                "category_id": category_id,
+                "category_name": str(cat["category_name"]),
+                "axis": category_axis(str(cat["category_name"])),
+                "market": short_market_label(domain_id),
+                "avg_top10": avg_pos,
+                "turnover_pct": turnover,
+                "delta_text": delta_text,
+                "delta_class": delta_class,
+                "top_count": len(top),
+            }
+        )
+    return indices
+
+
+def fetch_turnover_series(
+    conn: sqlite3.Connection,
+    *,
+    domain_id: int,
+    category_ids: list[str],
+    limit_dates: int = 30,
+) -> pd.DataFrame:
+    records: list[dict] = []
+    for category_id in category_ids:
+        dates = conn.execute(
+            """
+            SELECT DISTINCT snapshot_date FROM rank_snapshots_absolute
+            WHERE domain_id = ? AND category_id = ?
+            ORDER BY snapshot_date DESC
+            LIMIT ?
+            """,
+            (domain_id, category_id, limit_dates + 1),
+        ).fetchall()
+        date_list = sorted(str(row["snapshot_date"]) for row in dates)
+        name = conn.execute(
+            """
+            SELECT DISTINCT category_name FROM rank_snapshots_absolute
+            WHERE domain_id = ? AND category_id = ? LIMIT 1
+            """,
+            (domain_id, category_id),
+        ).fetchone()
+        label = str(name["category_name"]) if name else category_id
+        for index in range(1, len(date_list)):
+            current_date = date_list[index]
+            previous_date = date_list[index - 1]
+            current = _asins_for_snapshot(
+                conn, snapshot_date=current_date, domain_id=domain_id, category_id=category_id
+            )
+            before = _asins_for_snapshot(
+                conn, snapshot_date=previous_date, domain_id=domain_id, category_id=category_id
+            )
+            if not current or not before:
+                continue
+            turnover = round(len(current.symmetric_difference(before)) / max(len(current), 1) * 100, 1)
+            records.append({"fecha": current_date, "índice": label, "rotación_%": turnover})
+    return pd.DataFrame(records)
+
+
 def domain_label(domain_id: int) -> str:
     return DOMAIN_LABELS.get(domain_id, f"domain {domain_id}")
 

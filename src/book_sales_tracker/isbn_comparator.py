@@ -6,6 +6,7 @@ import streamlit as st
 from book_sales_tracker.marketplace import list_marketplace_options
 from book_sales_tracker.models import PipelineResult
 from book_sales_tracker.pipeline import PipelineError, run_pipeline
+from book_sales_tracker.ui.revolut_theme import apply_revolut_layout
 
 
 def _parse_isbn_list(raw: str) -> list[str]:
@@ -69,21 +70,15 @@ def _build_comparison_bsr_chart(results: list[PipelineResult]):
         x="fecha",
         y="bsr",
         color="libro",
-        markers=True,
-        labels={"fecha": "Fecha", "bsr": "Sales rank", "libro": "Libro"},
-        title="Comparativa BSR",
+        markers=False,
+        labels={"fecha": "", "bsr": "", "libro": "Libro"},
     )
     fig.update_yaxes(autorange="reversed")
-    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
-    return fig
+    return apply_revolut_layout(fig, height=300)
 
 
 def render_comparator_tab(settings) -> None:
-    st.subheader("Comparador ISBN")
-    st.caption(
-        "Compara la performance de dos o más libros en el mismo marketplace y periodo. "
-        "Solo BSR y tramos — sin estimación IA (ahorra tokens Gemini)."
-    )
+    st.caption("Compara activos en el mismo mercado y ventana temporal.")
 
     marketplace_options = list_marketplace_options()
     marketplace_labels = {label: code for code, label in marketplace_options}

@@ -3,7 +3,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 
 from book_sales_tracker.models import BsrPoint, BsrSummary, RankTier
-
+from book_sales_tracker.ui.revolut_theme import ACCENT_COLORS, apply_revolut_layout
 
 TIER_ORDER = [
     RankTier.TOP_10,
@@ -16,6 +16,8 @@ TIER_ORDER = [
 ]
 
 TIER_LABELS = [tier.label_es for tier in TIER_ORDER]
+
+CHART_COLORS = [ACCENT_COLORS["purple"], ACCENT_COLORS["cyan"], ACCENT_COLORS["amber"]]
 
 
 def points_to_dataframe(points: list[BsrPoint]) -> pd.DataFrame:
@@ -40,7 +42,6 @@ def build_tier_timeline_chart(points: list[BsrPoint]) -> go.Figure:
         y="Tramo ordinal",
         markers=True,
         hover_data={"BSR": True, "Tramo": True, "Tramo ordinal": False},
-        title="Evolución del tramo BSR (agregación diaria)",
     )
     fig.update_yaxes(
         tickmode="array",
@@ -49,13 +50,8 @@ def build_tier_timeline_chart(points: list[BsrPoint]) -> go.Figure:
         range=[0.5, RankTier.LONG_TAIL.value + 0.5],
         autorange=False,
     )
-    fig.update_layout(
-        yaxis_title="Tramo BSR",
-        xaxis_title="Fecha",
-        height=480,
-        margin=dict(l=40, r=20, t=60, b=40),
-    )
-    return fig
+    fig.update_layout(yaxis_title="", xaxis_title="")
+    return apply_revolut_layout(fig, height=320)
 
 
 def build_tier_distribution_chart(summary: BsrSummary) -> go.Figure:
@@ -65,8 +61,27 @@ def build_tier_distribution_chart(summary: BsrSummary) -> go.Figure:
         x=labels,
         y=values,
         labels={"x": "Tramo", "y": "% de días"},
-        title="Distribución de tiempo por tramo",
     )
-    fig.update_layout(height=360, margin=dict(l=40, r=20, t=60, b=80))
-    fig.update_xaxes(tickangle=-35)
-    return fig
+    fig.update_traces(marker_color=ACCENT_COLORS["purple"])
+    fig.update_layout(yaxis_title="", xaxis_title="")
+    fig.update_xaxes(tickangle=-25)
+    return apply_revolut_layout(fig, height=260)
+
+
+def build_market_turnover_chart(df: pd.DataFrame) -> go.Figure | None:
+    if df.empty:
+        return None
+    fig = px.line(
+        df,
+        x="fecha",
+        y="rotación_%",
+        color="índice",
+        markers=False,
+        color_discrete_sequence=CHART_COLORS,
+    )
+    fig.update_layout(
+        yaxis_title="",
+        xaxis_title="",
+        showlegend=True,
+    )
+    return apply_revolut_layout(fig, height=280)

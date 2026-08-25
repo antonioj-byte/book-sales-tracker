@@ -15,6 +15,7 @@ from book_sales_tracker.visualization import (
     build_tier_timeline_chart,
     points_to_dataframe,
 )
+from book_sales_tracker.ui import inject_revolut_theme, page_header, error_banner
 
 
 def _render_book_header(result) -> None:
@@ -82,13 +83,13 @@ def _run_analysis(
                 end_date=end_date,
             )
         except PipelineError as exc:
-            st.error(str(exc))
+            error_banner(str(exc))
             return
         except Exception as exc:
-            st.error(f"Error inesperado: {exc}")
+            error_banner(f"Error inesperado: {exc}")
             return
 
-    st.success("Análisis completado.")
+    st.markdown('<div class="rv-card">Análisis completado</div>', unsafe_allow_html=True)
 
     keepa = result.keepa
     if keepa.bsr_available_from and keepa.bsr_available_to:
@@ -134,13 +135,11 @@ def _run_analysis(
 
 
 def _render_analysis_tab(settings) -> None:
-    st.subheader("Análisis ISBN")
-    st.caption("Evolución de un solo libro: BSR, tramos, estimación IA (Keepa + Gemini).")
+    page_header("Buscar", subtitle="Detalle de activo · BSR y estimación")
 
     if not settings.has_gemini:
-        st.warning(
-            "Falta `GEMINI_API_KEY` en `.env`. Puedes usar **Comparador ISBN** (solo BSR) "
-            "o **Catálogo editorial** sin estimación IA."
+        error_banner(
+            "Falta GEMINI_API_KEY. Usa Comparar o Watchlist para análisis solo con Keepa."
         )
         return
 
@@ -263,50 +262,46 @@ def _render_analysis_tab(settings) -> None:
 
 def main() -> None:
     st.set_page_config(
-        page_title="Book Sales Tracker",
-        page_icon="📚",
+        page_title="Editorial Markets",
+        page_icon="📈",
         layout="wide",
+        initial_sidebar_state="collapsed",
     )
-    st.title("Book Sales Tracker")
+    inject_revolut_theme()
 
-    tab_analysis, tab_compare, tab_catalog, tab_monitor = st.tabs(
-        ["Análisis ISBN", "Comparador ISBN", "Catálogo editorial", "Monitor editorial"]
+    tab_monitor, tab_search, tab_compare, tab_watchlist = st.tabs(
+        ["Mercados", "Buscar", "Comparar", "Watchlist"]
     )
 
     with tab_monitor:
         render_monitor_tab()
 
-    with tab_catalog:
+    with tab_watchlist:
         try:
             settings = get_settings()
         except Exception as exc:
-            st.error(
-                "Configura `.env` con `KEEPA_API_KEY`. "
-                "Para descubrir catálogo también `GOOGLE_BOOKS_API_KEY`. "
-                f"Detalle: {exc}"
+            error_banner(
+                f"Configura KEEPA_API_KEY y GOOGLE_BOOKS_API_KEY en .env. Detalle: {exc}"
             )
         else:
+            page_header("Watchlist", subtitle="Catálogo editorial confirmado")
             render_publisher_catalog_tab(settings)
 
     with tab_compare:
         try:
             settings = get_settings()
         except Exception as exc:
-            st.error(
-                "Configura `.env` con `KEEPA_API_KEY` (y opcionalmente `GOOGLE_BOOKS_API_KEY`). "
-                f"Detalle: {exc}"
-            )
+            error_banner(f"Configura KEEPA_API_KEY en .env. Detalle: {exc}")
         else:
+            page_header("Comparar", subtitle="Overlay multilínea de activos")
             render_comparator_tab(settings)
 
-    with tab_analysis:
+    with tab_search:
         try:
             settings = get_settings()
         except Exception as exc:
-            st.error(
-                "No se pudo cargar la configuración. Crea un `.env` con "
-                "`KEEPA_API_KEY` (y `GEMINI_API_KEY` para esta pestaña). "
-                f"Detalle: {exc}"
+            error_banner(
+                f"Configura KEEPA_API_KEY y GEMINI_API_KEY en .env. Detalle: {exc}"
             )
         else:
             _render_analysis_tab(settings)

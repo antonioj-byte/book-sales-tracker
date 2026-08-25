@@ -6,6 +6,8 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from book_sales_tracker.ui.revolut_theme import apply_revolut_layout
+
 from book_sales_tracker.google_books import (
     GoogleBooksError,
     GoogleBooksUnavailableError,
@@ -80,12 +82,10 @@ def _performance_chart(results: list[PipelineResult]):
         y="bsr",
         color="libro",
         markers=False,
-        labels={"fecha": "Fecha", "bsr": "Sales rank", "libro": "Libro"},
-        title="Performance BSR del catálogo",
+        labels={"fecha": "", "bsr": "", "libro": "Libro"},
     )
     fig.update_yaxes(autorange="reversed")
-    fig.update_layout(legend=dict(orientation="h", yanchor="bottom", y=1.02))
-    return fig
+    return apply_revolut_layout(fig, height=280)
 
 
 def _render_empty_catalog_help(catalog_result, pub_start: str, pub_end: str) -> None:
@@ -167,10 +167,8 @@ def _load_publisher_catalog(
 
 
 def render_publisher_catalog_tab(settings) -> None:
-    st.subheader("Catálogo editorial")
     st.caption(
-        "1) Confirma el nombre exacto de la editorial en Google Books. "
-        "2) Carga el catálogo del periodo. 3) Analiza BSR con Keepa."
+        "Confirma editorial, carga catálogo del periodo y analiza performance BSR."
     )
 
     if not settings.google_books_api_key:
