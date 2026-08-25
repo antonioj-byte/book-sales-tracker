@@ -29,11 +29,16 @@ from book_sales_tracker.ui.components import (
 from book_sales_tracker.visualization import build_market_turnover_chart
 
 
-MARKET_ORDER = ["Global", "España", "UK", "Francia", "EE.UU.", "Italia", "Alemania"]
+MARKET_ORDER = ["España", "Global", "UK", "Francia", "EE.UU.", "Italia", "Alemania"]
+SPAIN_DOMAIN_ID = 9
 TIMEFRAMES = {"1d": 1, "1s": 7, "1m": 30, "6m": 180, "1a": 365}
 
 
 def _market_pill_options(markets: list[tuple[int, str]]) -> tuple[list[str], dict[str, int | None]]:
+    domain_ids = {domain_id for domain_id, _ in markets}
+    if domain_ids == {SPAIN_DOMAIN_ID}:
+        return ["España"], {"España": SPAIN_DOMAIN_ID}
+
     labels = ["Global"]
     mapping: dict[str, int | None] = {"Global": None}
     for domain_id, _ in markets:
@@ -101,11 +106,13 @@ def render_monitor_tab() -> None:
             return
 
         pill_labels, pill_map = _market_pill_options(absolute_markets)
+        default_market_index = pill_labels.index("España") if "España" in pill_labels else 0
         col_m1, col_m2 = st.columns([3, 2])
         with col_m1:
             selected_market = st.radio(
                 "Mercado",
                 options=pill_labels,
+                index=default_market_index,
                 horizontal=True,
                 label_visibility="collapsed",
                 key="rv_market_filter",

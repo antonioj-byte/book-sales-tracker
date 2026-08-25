@@ -57,7 +57,7 @@ def _seed_absolute(conn, snapshot_date: str, domain_id: int, category_id: str, a
 def test_detect_new_entrant_top10(conn):
     today = "2026-08-19"
     before = "2026-08-12"
-    cat = "902689031"
+    cat = "902674031"
     _seed_absolute(conn, before, 9, cat, {"A": 1, "B": 2, "C": 3})
     _seed_absolute(conn, today, 9, cat, {"A": 1, "NEWBOOK": 5, "B": 2})
 
@@ -72,7 +72,7 @@ def test_detect_new_entrant_top10(conn):
 def test_detect_surge_up(conn):
     today = "2026-08-19"
     before = "2026-08-12"
-    cat = "902689031"
+    cat = "902674031"
     _seed_absolute(conn, before, 9, cat, {"A": 1, "CLIMBER": 80, "B": 2})
     _seed_absolute(conn, today, 9, cat, {"A": 1, "CLIMBER": 25, "B": 2})
 
@@ -88,7 +88,7 @@ def test_detect_surge_up(conn):
 def test_filter_by_market(conn):
     today = "2026-08-19"
     before = "2026-08-12"
-    cat = "902689031"
+    cat = "902674031"
     _seed_absolute(conn, before, 9, cat, {"A": 1})
     _seed_absolute(conn, today, 9, cat, {"A": 1, "ESNEW": 8})
     _seed_absolute(conn, before, 1, cat, {"A": 1})

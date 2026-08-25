@@ -77,8 +77,8 @@ python scripts/detect_jumps.py --markets 9 --lookback-days 7
 # Dos mercados (requiere filas en categories.csv con mercado=9 y mercado=1)
 python scripts/detect_jumps.py --markets 9,1 --min-severity high
 
-# Solo Literatura y ficción
-python scripts/detect_jumps.py --categories 902689031 --format json
+# Solo Literatura y ficción (Amazon.es)
+python scripts/detect_jumps.py --categories 902674031 --format json
 
 # Guardar en alerts
 python scripts/detect_jumps.py --write-alerts --output reports/jumps.txt
@@ -104,13 +104,27 @@ python scripts/report.py --format csv --output reports/alerts.csv
 python scripts/report.py --days 14 --output reports/weekly.md
 ```
 
+## MVP España (configuración actual)
+
+`config/categories.csv` monitoriza solo **Amazon.es** (mercado 9):
+
+| Eje | Categoría | ID |
+|-----|-----------|-----|
+| Ficción | Literatura y ficción | 902674031 |
+| No ficción | Biografías, diarios y hechos reales | 902498031 |
+| No ficción | Historia | 902600031 |
+
+Más 2 ASINs relativos en `tracked_asins.csv` (dominio ES).
+
 ## Coste tokens (aprox./día)
 
 - 1 token / ASIN (batch en una llamada)
 - 50 tokens / categoría best sellers
 - 2 tokens / category_lookup (solo cada 30 días)
 
-Con UK + FR (4 categorías) + 2 ASINs relativos: **~202 tokens/día**.
+**MVP España:** 3 categorías + 2 ASINs ≈ **152 tokens/día** (`MAX_TOKENS_PER_RUN=175`).
+
+Para ampliar a UK/FR u otras categorías, edita `categories.csv`.
 
 ## Rama de respaldo
 

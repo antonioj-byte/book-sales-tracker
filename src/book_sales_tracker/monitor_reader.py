@@ -50,7 +50,35 @@ DOMAIN_SHORT: dict[int, str] = {
     9: "España",
 }
 
-FICTION_HINTS = ("literature", "fiction", "roman", "ficción", "ficcion", "romans")
+FICTION_HINTS = (
+    "literature",
+    "fiction",
+    "roman",
+    "ficción",
+    "ficcion",
+    "literatura",
+    "policiaca",
+    "suspense",
+    "romántica",
+    "romantica",
+    "juvenil",
+    "infantil",
+    "fantasía",
+    "fantasia",
+)
+NONFICTION_HINTS = (
+    "biograf",
+    "historia",
+    "ciencias",
+    "tecnología",
+    "política",
+    "sociedad",
+    "salud",
+    "desarrollo personal",
+    "derecho",
+    "economía",
+    "economia",
+)
 
 
 def short_market_label(domain_id: int) -> str:
@@ -59,8 +87,10 @@ def short_market_label(domain_id: int) -> str:
 
 def category_axis(category_name: str) -> str:
     name = category_name.lower()
+    if any(hint in name for hint in NONFICTION_HINTS):
+        return "NF"
     if any(hint in name for hint in FICTION_HINTS):
-        return "NF" if "non-fiction" in name or "no ficción" in name else "F"
+        return "F"
     return "NF"
 
 
